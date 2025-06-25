@@ -2,42 +2,47 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <title>Logout Successful</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Successful</title>
     <style>
         :root {
             --primary-color: #2c3e50;
-            --secondary-color: #3498db;
-            --background-gradient: linear-gradient(135deg, #3498db, #2c3e50);
-            --text-color: #ffffff;
-            --button-hover: #2980b9;
-            --card-bg: rgba(255, 255, 255, 0.95);
+            --secondary-color: #4998ff;
+            --background-color: #ecf0f1;
+            --button-hover: #59acff;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--background-gradient);
+            background: linear-gradient(135deg, #8b5ae0, #91257a);
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
+            padding: 20px;
         }
 
         .container {
-            background-color: var(--card-bg);
+            background-color: rgba(255, 255, 255, 0.95);
             padding: 40px;
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
             text-align: center;
             width: 100%;
-            max-width: 500px;
+            max-width: 300px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(1.2); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         h1 {
             color: var(--primary-color);
             margin-bottom: 20px;
-            font-size: 2.5rem;
+            font-size: 2rem;
         }
 
         p {
@@ -49,31 +54,35 @@
         .links {
             display: flex;
             justify-content: center;
-            gap: 20px;
+            flex-direction: column;
+            gap: 15px;
         }
 
         .links a {
             background-color: var(--secondary-color);
-            color: var(--text-color);
-            padding: 12px 25px;
-            border-radius: 6px;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
             text-decoration: none;
-            font-weight: 500;
+            font-weight: bold;
+            font-size: 15px;
             transition: background-color 0.3s ease;
         }
 
         .links a:hover {
             background-color: var(--button-hover);
         }
+
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Logout Successful</h1>
-        <p>GoodBye, {{ username }}!</p>
-        <div class="links">
-            <a href="/">返回首页</a>
-        </div>
+<div id="background" onclick="window.location.href='/'" style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:0;"></div>
+<div class="container" style="z-index:1;">
+    <h1>退出成功</h1>
+    <p>再见，{{ username }}！</p>
+    <div class="links">
+        <a href="/">返回首页</a>
     </div>
+</div>
 </body>
 </html>

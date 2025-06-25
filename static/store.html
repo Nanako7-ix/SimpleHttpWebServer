@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>File Repository</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #4998ff;
+            --background-gradient: linear-gradient(135deg, #6554ff, #ad43f4);
+            --text-color: #ffffff;
+            --button-hover: #59acff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--background-gradient);
+            color: var(--text-color);
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 20px;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        form {
+            display: flex;
+            max-width: 500px;
+            width: 100%;
+            margin-bottom: 30px;
+            animation: popIn 0s ease;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px 0 0 5px;
+            font-size: 16px;
+        }
+
+        input[type="submit"] {
+            padding: 10px 20px;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border: none;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        input[type="submit"]:hover {
+            background-color: var(--button-hover);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .file-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            opacity: 0;
+            animation: popIn 0.4s ease forwards;
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .file-item a {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 5px 10px;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .file-item a:hover {
+            background-color: var(--button-hover);
+        }
+    </style>
+</head>
+<body>
+<h1>Files Searched</h1>
+<form action='/search' method='GET'>
+    <input type="text" name="q" placeholder="Search files..." />
+    <input type="submit" value="Search">
+</form>
+<form action='/' method='POST' style="margin-top: -100px; margin-bottom: 100px;">
+    <button type="submit" style="
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    animation: popIn 1s;
+  ">Back</button>
+</form>
+<div class="grid">
+    {{fileList}}
+</div>
+
+</body>
+</html>

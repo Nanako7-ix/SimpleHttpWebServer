@@ -1,0 +1,219 @@
+<canvas id="canvas"></canvas>
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let W, H;
+    function resize() {
+        W = window.innerWidth;
+        H = window.innerHeight;
+        canvas.width = W;
+        canvas.height = H;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const PARTICLE_COUNT = 10;
+    const SPRING_LENGTH = 150;
+    const SPRING_STIFFNESS = 0.001; // 弹簧力强度
+
+    const BORDER_REPEL_DISTANCE = 50; // 距离边缘多少范围内产生排斥力
+    const BORDER_REPEL_STRENGTH = 0.05; // 边缘排斥力强度
+
+    const MOUSE_EFFECT_RADIUS = 150; // 鼠标影响范围
+    const MOUSE_SPRING_LENGTH = 80; // 鼠标弹簧力作用距离
+    const MOUSE_SPRING_STIFFNESS = 0.1; // 鼠标弹簧力强度
+    const MOUSE_TANGENTIAL_STRENGTH = 1; // 鼠标产生的切向力强度
+
+    class Particle {
+        constructor(x, y) {
+            this.pos = { x, y };
+            this.vel = { x: (Math.random() - 0.5) * 1, y: (Math.random() - 0.5) * 1 };
+            this.acc = { x: 0, y: 0 };
+            this.size = 3 + Math.random() * 2;
+            this.mass = 1;
+        }
+
+        applyForce(fx, fy) {
+            this.acc.x += fx / this.mass;
+            this.acc.y += fy / this.mass;
+        }
+
+        update() {
+            this.vel.x += this.acc.x;
+            this.vel.y += this.acc.y;
+
+            // 阻尼，防止速度无限大
+            this.vel.x *= 0.9;
+            this.vel.y *= 0.9;
+
+            this.pos.x += this.vel.x;
+            this.pos.y += this.vel.y;
+
+            this.acc.x = 0;
+            this.acc.y = 0;
+
+            // 保证粒子不会飞出画布
+            if (this.pos.x < 0) {
+                this.pos.x = 0;
+                this.vel.x *= -0.7;
+            }
+            if (this.pos.x > W) {
+                this.pos.x = W;
+                this.vel.x *= -0.7;
+            }
+            if (this.pos.y < 0) {
+                this.pos.y = 0;
+                this.vel.y *= -0.7;
+            }
+            if (this.pos.y > H) {
+                this.pos.y = H;
+                this.vel.y *= -0.7;
+            }
+        }
+
+        draw(ctx) {
+            ctx.beginPath();
+            ctx.fillStyle = 'white';
+            ctx.shadowColor = 'white';
+            ctx.shadowBlur = 8;
+            ctx.arc(this.pos.x, this.pos.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    const particles = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particles.push(new Particle(Math.random() * W, Math.random() * H));
+    }
+
+    // 获取与粒子p相邻（距离小于SPRING_LENGTH）的粒子列表
+    function getNeighbors(p) {
+        return particles.filter((other) => {
+            if (other === p) return false;
+            const dx = other.pos.x - p.pos.x;
+            const dy = other.pos.y - p.pos.y;
+            return dx * dx + dy * dy < SPRING_LENGTH * SPRING_LENGTH;
+        });
+    }
+
+    const mouse = { x: W / 2, y: H / 2, isActive: false };
+    window.addEventListener('mousemove', (e) => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        mouse.isActive = true;
+    });
+    window.addEventListener('mouseout', (e) => {
+        mouse.isActive = false;
+    });
+
+    function animate() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.fillRect(0, 0, W, H);
+
+        // 画粒子间连接线
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        for (const p of particles) {
+            const neighbors = getNeighbors(p);
+            for (const n of neighbors) {
+                ctx.beginPath();
+                ctx.moveTo(p.pos.x, p.pos.y);
+                ctx.lineTo(n.pos.x, n.pos.y);
+                ctx.stroke();
+            }
+        }
+
+        // 画鼠标影响半径圈
+        if (mouse.isActive) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(mouse.x, mouse.y, MOUSE_EFFECT_RADIUS, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        for (const p of particles) {
+            // 粒子间弹簧力
+            const neighbors = getNeighbors(p);
+            for (const n of neighbors) {
+                const dx = n.pos.x - p.pos.x;
+                const dy = n.pos.y - p.pos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist === 0) continue;
+                const diff = dist - SPRING_LENGTH;
+                const force = SPRING_STIFFNESS * diff;
+                const fx = (dx / dist) * force;
+                const fy = (dy / dist) * force;
+                p.applyForce(fx, fy);
+                n.applyForce(-fx, -fy);
+            }
+
+            // 边界排斥力，离边缘越近力越大，但弱于弹簧力
+            if (p.pos.x < BORDER_REPEL_DISTANCE) {
+                const dist = p.pos.x;
+                const strength = (BORDER_REPEL_DISTANCE - dist) / BORDER_REPEL_DISTANCE * BORDER_REPEL_STRENGTH;
+                p.applyForce(strength, 0);
+            } else if (p.pos.x > W - BORDER_REPEL_DISTANCE) {
+                const dist = W - p.pos.x;
+                const strength = (BORDER_REPEL_DISTANCE - dist) / BORDER_REPEL_DISTANCE * BORDER_REPEL_STRENGTH;
+                p.applyForce(-strength, 0);
+            }
+
+            if (p.pos.y < BORDER_REPEL_DISTANCE) {
+                const dist = p.pos.y;
+                const strength = (BORDER_REPEL_DISTANCE - dist) / BORDER_REPEL_DISTANCE * BORDER_REPEL_STRENGTH;
+                p.applyForce(0, strength);
+            } else if (p.pos.y > H - BORDER_REPEL_DISTANCE) {
+                const dist = H - p.pos.y;
+                const strength = (BORDER_REPEL_DISTANCE - dist) / BORDER_REPEL_DISTANCE * BORDER_REPEL_STRENGTH;
+                p.applyForce(0, -strength);
+            }
+
+            // 鼠标弹簧力及切向角动量（只对范围内粒子生效）
+            if (mouse.isActive) {
+                const dx = mouse.x - p.pos.x;
+                const dy = mouse.y - p.pos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < MOUSE_EFFECT_RADIUS && dist !== 0) {
+                    // 弹簧力（吸引或排斥）
+                    const diff = dist - MOUSE_SPRING_LENGTH;
+                    const force = MOUSE_SPRING_STIFFNESS * diff;
+                    const fx = (dx / dist) * force;
+                    const fy = (dy / dist) * force;
+                    p.applyForce(fx, fy);
+
+                    // 切向角动量（让粒子绕鼠标旋转）
+                    const tx = -dy / dist;
+                    const ty = dx / dist;
+                    p.applyForce(tx * MOUSE_TANGENTIAL_STRENGTH, ty * MOUSE_TANGENTIAL_STRENGTH);
+                }
+            }
+        }
+
+        for (const p of particles) {
+            p.update();
+            p.draw(ctx);
+        }
+
+        requestAnimationFrame(animate);
+    }
+    animate();
+</script>
+
+<style>
+    body, html {
+        margin: 0;
+        padding: 0;
+        background: #111;
+        overflow: hidden;
+    }
+    canvas {
+        display: block;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw;
+        height: 100vh;
+    }
+</style>

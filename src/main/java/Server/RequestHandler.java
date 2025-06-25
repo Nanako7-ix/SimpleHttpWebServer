@@ -98,11 +98,12 @@ public class RequestHandler implements Runnable {
     private HttpResponse processRequest(HttpRequest request) {
         try {
             String path = request.path();
-
-            return switch (path) {
+            System.out.println(path);
+            return switch (path.contains("?") ? path.substring(0, path.indexOf('?')) : path) {
                 case "/login" -> handleLogin(request);
                 case "/logout" -> handleLogout(request);
                 case "/search" -> handleSearch(request);
+                case "/repo" -> handleDownload(request);
                 case "/admin" -> handleAdmin(request);
                 case "/admin/shutdown" -> handleShutdown(request);
                 default -> handleStaticFile(request);
@@ -189,29 +190,92 @@ public class RequestHandler implements Runnable {
         }
     }
 
-    // /**
-    //  * 处理搜索请求
-    //  */
-    // private HttpResponse handleSearch(HttpRequest request) {
-    //     if ("POST".equals(request.method())) {
-    //         Map<String, String> params = parseFormData(request.body());
-    //         String query = params.get("query");
+    /**
+     * 处理仓库的文件搜索请求
+     */
+    private HttpResponse handleSearch(HttpRequest request) {
+        String query = extractQueryParam(request.path());
 
-    //         String response = "<h1>Search Results</h1><p>You searched for: <strong>" +
-    //                 (query != null ? query : "nothing") + "</strong></p>" +
-    //                 "<p>This is a demo search. In a real application, you would query a database.</p>" +
-    //                 "<p><a href='/'>Back to home</a></p>";
+        File htmlFile = new File("static/store.html");
+        if (!htmlFile.exists()) {
+            return new HttpResponse(404, "Not Found", "text/html",
+                    "<h1>404 Not Found</h1><p>store.html not found.</p>");
+        }
 
-    //         return new HttpResponse(200, "OK", "text/html", response);
-    //     }
+        try {
+            // 读取模板内容
+            String content = Files.readString(htmlFile.toPath(), StandardCharsets.UTF_8);
 
-    //     return new HttpResponse(405, "Method Not Allowed", "text/html", "<h1>405 Method Not Allowed</h1>");
-    // }
+            // 动态插入文件列表
+            File[] files = new File(HttpWebServer.RECOURSES_DIR).listFiles();
+            StringBuilder fileListHtml = new StringBuilder();
+            if (files != null) {
+                int index = 0;
+                for (File file : files) {
+                    if (query == null || file.getName().contains(query)) {
+                        fileListHtml.append("<div class='file-item' style='animation-delay: ")
+                                .append(0.4 * index / files.length)
+                                .append("s;'>")
+                                .append("<div>").append(file.getName()).append("</div>")
+                                .append("<a href='/repo?").append(file.getName()).append("'>Download</a>")
+                                .append("</div>\n");
+                        index++;
+                    }
+                }
+            }
+
+            content = content.replace("{{fileList}}", fileListHtml.toString());
+
+            content = content.replace("{{fileList}}", fileListHtml.toString());
+            return new HttpResponse(200, "OK", "text/html", content.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            return new HttpResponse(500, "Internal Server Error", "text/html",
+                    ("<h1>500 Internal Server Error</h1><p>" + e.getMessage() + "</p>").getBytes());
+        }
+    }
+
+    // 从路径提取查询参数 ?q=search
+    private String extractQueryParam(String path) {
+        if (path.contains("?")) {
+            String query = path.split("\\?")[1];
+            for (String param : query.split("&"))
+                if (param.startsWith("q="))
+                    return URLDecoder.decode(param.substring(2), StandardCharsets.UTF_8);
+        }
+        return null;
+    }
+
+    /**
+     * 处理文件下载请求
+     */
+    private HttpResponse handleDownload(HttpRequest request) {
+        String path = request.path();
+        String filename = path.substring("/repo/".length()); // 去除前缀
+
+        File file = new File(HttpWebServer.RECOURSES_DIR, filename); // 资源目录 + 文件名
+        if (!file.exists() || file.isDirectory()) {
+            return new HttpResponse(404, "Not Found", "text/html",
+                    "<h1>404 Not Found</h1><p>Requested file not found.</p>");
+        }
+
+        try {
+            byte[] fileContent = Files.readAllBytes(file.toPath());
+
+            HttpResponse response = new HttpResponse(200, "OK",
+                    "application/octet-stream", fileContent);
+            response.addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+            return response;
+        } catch (IOException e) {
+            return new HttpResponse(500, "Internal Server Error", "text/html",
+                    ("<h1>500 Internal Server Error</h1><p>" + e.getMessage() + "</p>").getBytes());
+        }
+    }
 
     /**
      * 处理访问管理页面请求
      */
     private HttpResponse handleAdmin(HttpRequest request) {
+        System.out.println(123);
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
 
@@ -291,12 +355,12 @@ public class RequestHandler implements Runnable {
             path = "/index.html";
         }
 
-        if (path.equals("/index.html") && getCookieValue(request, "sessionId") == null) {
-            // 如果是 index.html 且没有 SessionId, 重定向到登录页面
-            HttpResponse response = new HttpResponse(302, "Found", "text/html", "");
-            response.addHeader("Location", "/login");
-            return response;
-        }
+//        if (path.equals("/index.html") && getCookieValue(request, "sessionId") == null) {
+//            // 如果是 index.html 且没有 SessionId, 重定向到登录页面
+//            HttpResponse response = new HttpResponse(302, "Found", "text/html", "");
+//            response.addHeader("Location", "/login");
+//            return response;
+//        }
 
         File file = new File("static" + path);
         if (!file.exists() || file.isDirectory()) {
@@ -306,55 +370,28 @@ public class RequestHandler implements Runnable {
         }
 
         try {
-            byte[] content = java.nio.file.Files.readAllBytes(file.toPath());
+            byte[] byteContent = java.nio.file.Files.readAllBytes(file.toPath());
             String mimeType = getMimeType(file.getName());
 
-            return new HttpResponse(200, "OK", mimeType, content);
+            // dong tai chu li login/logout he admin de xian shi
+            String content = new String(byteContent, StandardCharsets.UTF_8);
+            String sessionId = getCookieValue(request, "sessionId");
+            String replaceHref = (sessionId != null) ? "/logout" : "/login";
+            String replaceText = (sessionId != null) ? "Logout" : "Login";
+            content = content.replaceAll(
+                "<a href=\"/auth_link\">auth_link</a>",
+                "<a href=\"" + replaceHref + "\">" + replaceText + "</a>"
+            );
+            Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
+            boolean isAdmin = session != null && "admin".equals(session.getUsername());
+            if (!isAdmin) content = content.replace("<a href='/admin'>Admin</a>", "");
+
+            return new HttpResponse(200, "OK", mimeType, content.getBytes());
         } catch (IOException e) {
             // TODO: 换一下这个默认界面
             return new HttpResponse(500, "Internal Server Error", "text/html",
                     "<h1>500 Internal Server Error</h1><p>Error reading file: " + e.getMessage() + "</p>");
         }
-    }
-
-    /**
-     * 处理仓库的文件搜索请求
-     */
-    private HttpResponse handleSearch(HttpRequest request) {
-        String query = extractQueryParam(request.path());
-        
-        // 获取仓库文件列表
-        File filDir = new File(HttpWebServer.RECOURSES_DIR);
-        File[] files = filDir.listFiles();
-        
-        // 生成HTML列表
-        StringBuilder html = new StringBuilder();
-        html.append("<h1>File Repository</h1>");
-        html.append("<form action='/repo' method='get'>");
-        html.append("<input type='text' name='q' placeholder='Search files...'>");
-        html.append("<button type='submit'>Search</button>");
-        html.append("</form><hr>");
-        
-        if (files != null) 
-            for (File file : files) 
-                if (query == null || file.getName().contains(query)) 
-                    html.append("<div>")
-                        .append(file.getName())
-                        .append(" <a href='/repo/").append(file.getName()).append("'>Download</a>")
-                        .append("</div>");
-                        
-        return new HttpResponse(200, "OK", "text/html", html.toString().getBytes());
-    }
-
-    // 从路径提取查询参数 ?q=search
-    private String extractQueryParam(String path) {
-        if (path.contains("?")) {
-            String query = path.split("\\?")[1];
-            for (String param : query.split("&")) 
-                if (param.startsWith("q=")) 
-                    return URLDecoder.decode(param.substring(2), StandardCharsets.UTF_8);
-        }
-        return null;
     }
     
     /**
