@@ -1,10 +1,129 @@
 <!DOCTYPE html>
-<html lang="en"><head><title>HTTP Web Server</title></head>
+<html lang="en">
+<head>
+    <title>HTTP Web Server</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-gradient: linear-gradient(135deg, #3498db, #2c3e50);
+            --text-color: #ffffff;
+            --button-hover: #2980b9;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--background-gradient);
+            color: var(--text-color);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            animation: fadeInDown 1s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        nav {
+            margin-bottom: 30px;
+            animation: fadeIn 1.5s ease-out;
+        }
+
+        nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: background 0.3s ease;
+        }
+
+        nav a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        form {
+            display: flex;
+            width: 100%;
+            max-width: 500px;
+            animation: fadeIn 2s ease-out;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 5px 0 0 5px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        input[type="submit"] {
+            padding: 15px 30px;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border: none;
+            border-radius: 0 5px 5px 0;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        input[type="submit"]:hover {
+            background-color: var(--button-hover);
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 2rem;
+            }
+            nav a {
+                display: block;
+                margin: 10px 0;
+            }
+            form {
+                flex-direction: column;
+            }
+            input[type="text"] {
+                border-radius: 5px;
+                margin-bottom: 10px;
+            }
+            input[type="submit"] {
+                border-radius: 5px;
+            }
+        }
+    </style>
+</head>
 <body>
-<h1>Welcome to Custom HTTP Server</h1>
-<p><a href='/login'>Login</a> | <a href='/admin'>Admin</a></p>
-<form action='/search' method='POST'>
-<input type='text' name='query' placeholder='Search...'>
-<input type='submit' value='Search'>
-</form>
-</body></html>
+    <h1>Welcome to Custom HTTP Server</h1>
+    <nav>
+        <a href='/login'>Login</a>
+        <a href='/admin'>Admin</a>
+    </nav>
+    <form action='/search' method='POST'>
+        <input type='text' name='query' placeholder='Search...'>
+        <input type='submit' value='Search'>
+    </form>
+</body>
+</html>
