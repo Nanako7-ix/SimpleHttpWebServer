@@ -7,6 +7,7 @@ import util.User;
 
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.text.SimpleDateFormat;
 import java.net.URLDecoder;
@@ -287,19 +288,22 @@ public class RequestHandler implements Runnable {
             for (String pair : pairs) {
                 String[] keyValue = pair.split("=", 2);
                 if (keyValue.length == 2) {
-                    try {
-                        String key = URLDecoder.decode(keyValue[0], "UTF-8");
-                        String value = URLDecoder.decode(keyValue[1], "UTF-8");
-                        params.put(key, value);
-                    } catch (UnsupportedEncodingException e) {
-                        // Ignore malformed parameters
-                    }
+                    String key = URLDecoder.decode(keyValue[0], StandardCharsets.UTF_8);
+                    String value = URLDecoder.decode(keyValue[1], StandardCharsets.UTF_8);
+                    params.put(key, value);
                 }
             }
         }
         return params;
     }
 
+    /**
+     * 获取指定 cookieName=cookie 的 cookie 值
+     * 感觉这个似乎没什么改的必要
+     * @param request 解析的 HTTP 请求对象
+     * @param cookieName 需要的 cookie 名称
+     * @return cookie 的值
+     */
     private String getCookieValue(HttpRequest request, String cookieName) {
         String cookieHeader = request.headers().get("cookie");
         if (cookieHeader != null) {
@@ -314,12 +318,17 @@ public class RequestHandler implements Runnable {
         return null;
     }
 
+    /**
+     * 简单地为每个 session 生成一个唯一的 ID
+     */
     private String generateSessionId() {
         return UUID.randomUUID().toString();
     }
 
     /**
      *  简单的类型猜测 感觉可以完善一点？
+     * @param fileName 需要猜测的文件名
+     * @return 猜测的 MIME 类型
      */
     private String getMimeType(String fileName) {
         String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
