@@ -8,9 +8,9 @@
         :root {
             --primary-color: #2c3e50;
             --secondary-color: #3498db;
-            --background-gradient: linear-gradient(135deg, #3498db, #2c3e50);
+            --background-gradient: linear-gradient(135deg, #51a2d8, #4343f4);
             --text-color: #ffffff;
-            --button-hover: #2980b9;
+            --button-hover: #3caaff;
         }
 
         body {
@@ -30,7 +30,7 @@
             font-size: 2.5rem;
             margin-bottom: 20px;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-            animation: fadeInDown 1s ease-out;
+            animation: fadeInDown 0.5s ease-out;
         }
 
         @keyframes fadeInDown {
@@ -50,13 +50,15 @@
         }
 
         nav a {
+            position: relative;
+            top: 20px;
+            left: -56px;
             color: var(--text-color);
             text-decoration: none;
-            margin: 0 15px;
             padding: 10px 20px;
             border-radius: 5px;
             background: rgba(255, 255, 255, 0.1);
-            transition: background 0.3s ease;
+            transition: background 0.01s easet;
         }
 
         nav a:hover {
@@ -71,8 +73,11 @@
         }
 
         input[type="text"] {
+            position: relative;
+            left: -56px;
+            text-align:center;
             flex: 1;
-            padding: 15px;
+            padding: 0px 160px;
             border: none;
             border-radius: 5px 0 0 5px;
             font-size: 16px;
@@ -80,6 +85,9 @@
         }
 
         input[type="submit"] {
+            font-weight: bold;
+            position: relative;
+            left: -56px;
             padding: 15px 30px;
             background-color: var(--secondary-color);
             color: var(--text-color);
@@ -87,7 +95,7 @@
             border-radius: 0 5px 5px 0;
             font-size: 16px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            transition: background-color 0.04s ease-out;
         }
 
         input[type="submit"]:hover {
@@ -118,12 +126,12 @@
 <body>
     <h1>Welcome to Custom HTTP Server</h1>
     <nav>
+         <form action='/search' method='POST'>
+             <input type='text' name='query' placeholder='Search...'>
+             <input type='submit' value='GO'>
+         </form>
         <a href='/login'>Login</a>
         <a href='/admin'>Admin</a>
     </nav>
-    <form action='/search' method='POST'>
-        <input type='text' name='query' placeholder='Search...'>
-        <input type='submit' value='Search'>
-    </form>
 </body>
 </html>
