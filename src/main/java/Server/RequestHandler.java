@@ -52,10 +52,9 @@ public class RequestHandler implements Runnable {
     }
 
     /**
-     * Parses the HTTP request from the client.
-     * Body is String, so can not handle binary data.
-     * @return HttpRequest object containing the request details, or null if the request is invalid.
-     * @throws IOException
+     * 解析 HTTP 请求报文
+     * Body 是 String 类型, 不能上传二进制数据 (例如图片等)
+     * @return 一个HttpRequest 对象, 即 Http 请求报文
      */
     private HttpRequest parseRequest() throws IOException {
         String requestLine = in.readLine();
@@ -97,25 +96,18 @@ public class RequestHandler implements Runnable {
     private HttpResponse processRequest(HttpRequest request) {
         try {
             String path = request.path();
-            String method = request.method();
 
-            // Handle dynamic routes
-            if (path.equals("/login")) {
-                return handleLogin(request);
-            } else if (path.equals("/logout")) {
-                return handleLogout(request);
-            } else if (path.equals("/search")) {
-                return handleSearch(request);
-            } else if (path.equals("/admin")) {
-                return handleAdmin(request);
-            } else if (path.equals("/admin/shutdown")) {
-                return handleShutdown(request);
-            } else {
-                // Handle static files
-                return handleStaticFile(request);
-            }
+            return switch (path) {
+                case "/login" -> handleLogin(request);
+                case "/logout" -> handleLogout(request);
+                case "/search" -> handleSearch(request);
+                case "/admin" -> handleAdmin(request);
+                case "/admin/shutdown" -> handleShutdown(request);
+                default -> handleStaticFile(request);
+            };
 
         } catch (Exception e) {
+            // TODO: 换一下这个默认界面
             return new HttpResponse(500, "Internal Server Error",
                     "text/html", "<h1>500 Internal Server Error</h1><p>" + e.getMessage() + "</p>");
         }
@@ -123,7 +115,6 @@ public class RequestHandler implements Runnable {
 
     private HttpResponse handleLogin(HttpRequest request) {
         if ("GET".equals(request.method())) {
-            // Serve login page
             return handleStaticFile(new HttpRequest("GET", "/login.html", request.version(),
                     request.headers(), ""));
         } else if ("POST".equals(request.method())) {
@@ -156,6 +147,11 @@ public class RequestHandler implements Runnable {
         return new HttpResponse(400, "Bad Request", "text/html", "<h1>400 Bad Request</h1>");
     }
 
+    /**
+     * 处理 /logout 请求
+     * 需要删除 sessionId 这个会话
+     * 同时清空 cookie
+     */
     private HttpResponse handleLogout(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
         if (sessionId != null) {
@@ -164,7 +160,7 @@ public class RequestHandler implements Runnable {
 
         HttpResponse response = new HttpResponse(200, "OK", "text/html",
                 "<h1>Logged Out</h1><p><a href='/login'>Login again</a></p>");
-        response.addCookie("sessionId", ""); // Clear cookie
+        response.eraseCookie("sessionId");
         return response;
     }
 
@@ -184,16 +180,25 @@ public class RequestHandler implements Runnable {
         return new HttpResponse(405, "Method Not Allowed", "text/html", "<h1>405 Method Not Allowed</h1>");
     }
 
+    /**
+     * 处理 /admin 请求
+     * 当访问 /admin 时, 需要验证用户是否为 admin
+     * 如果是, 则返回一个管理界面, 显示服务器状态和操作链接
+     * 如果不是, 则返回 403 Forbidden
+     */
     private HttpResponse handleAdmin(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
 
         if (session == null || !session.getUsername().equals("admin")) {
+            // TODO：换一下这个默认界面
             return new HttpResponse(403, "Forbidden", "text/html",
                     "<h1>403 Forbidden</h1><p>Admin access required</p><a href='/login'>Login</a>");
         }
 
         long uptime = System.currentTimeMillis() - server.getStartTime().get();
+        // TODO：换一下这个默认界面
+        // 从后端发送数据到前端可能还要学一下怎么写
         String response = "<h1>Server Administration</h1>" +
                 "<h2>Server Statistics</h2>" +
                 "<ul>" +
@@ -210,12 +215,10 @@ public class RequestHandler implements Runnable {
     }
 
     /**
-     * admin 用户有关闭服务器的权限
+     * 处理 /admin/shutdown 请求
      * 当访问 /admin/shutdown 时, 需要验证用户是否为 admin
      * 如果是, 则返回一个确认页面, 并在 2 秒后关闭服务器
      * 如果不是, 则返回 403 Forbidden
-     * @param request
-     * @return
      */
     private HttpResponse handleShutdown(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
@@ -245,8 +248,8 @@ public class RequestHandler implements Runnable {
 
     /**
      * 根据请求的路径处理静态文件
-     * @param request
-     * @return
+     * @param request 请求报文
+     * @return 响应报文
      */
     private HttpResponse handleStaticFile(HttpRequest request) {
         String path = request.path();
@@ -277,7 +280,6 @@ public class RequestHandler implements Runnable {
      * 发送 HTTP 响应报文
      * 这里默认使用 HTTP/1.1 协议, 根据加分项, 这里需要支持 HTTPS
      * @param response 需要发送的 HTTP 响应对象
-     * @throws IOException
      */
     private void sendResponse(HttpResponse response) throws IOException {
         // 状态行
@@ -287,7 +289,7 @@ public class RequestHandler implements Runnable {
         out.println("Content-Type: " + response.getContentType());
         out.println("Content-Length: " + response.getContentLength());
         out.println("Server: CustomHTTPServer/1.0");
-        out.println("Date: " + new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz").format(new Date()));
+        out.println("Date: " + new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH).format(new Date()));
         // 支持 Cookie
         for (String cookie : response.getCookies()) {
             out.println("Set-Cookie: " + cookie);
