@@ -1,9 +1,6 @@
 package Server;
 
-import util.HttpRequest;
-import util.HttpResponse;
-import util.Session;
-import util.User;
+import util.*;
 
 import java.io.*;
 import java.net.*;
@@ -359,24 +356,18 @@ public class RequestHandler implements Runnable {
         return UUID.randomUUID().toString();
     }
 
-    /**
-     *  简单的类型猜测 感觉可以完善一点？
-     * @param fileName 需要猜测的文件名
-     * @return 猜测的 MIME 类型
-     */
     private String getMimeType(String fileName) {
-        String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
-        return switch (extension) {
-            case "html", "htm" -> "text/html";
-            case "css" -> "text/css";
-            case "js" -> "application/javascript";
-            case "json" -> "application/json";
-            case "png" -> "image/png";
-            case "jpg", "jpeg" -> "image/jpeg";
-            case "gif" -> "image/gif";
-            case "ico" -> "image/x-icon";
-            case "txt" -> "text/plain";
-            default -> "application/octet-stream";
-        };
+        MimeType mimeType = MimeType.fromFilename(fileName);
+        return mimeType.getMimeType();
+    }
+
+    private boolean isTextFile(String fileName) {
+        MimeType mimeType = MimeType.fromFilename(fileName);
+        return mimeType.isText();
+    }
+
+    private boolean isImageFile(String fileName) {
+        MimeType mimeType = MimeType.fromFilename(fileName);
+        return mimeType.isImage();
     }
 }
