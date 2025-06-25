@@ -209,6 +209,14 @@ public class RequestHandler implements Runnable {
         return new HttpResponse(200, "OK", "text/html", response);
     }
 
+    /**
+     * admin 用户有关闭服务器的权限
+     * 当访问 /admin/shutdown 时, 需要验证用户是否为 admin
+     * 如果是, 则返回一个确认页面, 并在 2 秒后关闭服务器
+     * 如果不是, 则返回 403 Forbidden
+     * @param request
+     * @return
+     */
     private HttpResponse handleShutdown(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
@@ -218,10 +226,10 @@ public class RequestHandler implements Runnable {
                     "<h1>403 Forbidden</h1><p>Admin access required</p>");
         }
 
-        // Schedule shutdown
+        // 增加一个自动关闭服务器的线程, 5s 后调用 server.stop() 函数服务器
         new Thread(() -> {
             try {
-                Thread.sleep(2000); // Give time to send response
+                Thread.sleep(5000);
                 server.stop();
                 System.exit(0);
             } catch (InterruptedException e) {
@@ -229,10 +237,17 @@ public class RequestHandler implements Runnable {
             }
         }).start();
 
+        // TODO：换一下这个默认界面
+        // 返回一个操作成功的页面
         return new HttpResponse(200, "OK", "text/html",
                 "<h1>Server Shutting Down</h1><p>The server will shutdown in 2 seconds...</p>");
     }
 
+    /**
+     *
+     * @param request
+     * @return
+     */
     private HttpResponse handleStaticFile(HttpRequest request) {
         String path = request.path();
         if (path.equals("/")) {
