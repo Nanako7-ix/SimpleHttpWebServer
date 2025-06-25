@@ -167,15 +167,26 @@ public class RequestHandler implements Runnable {
      */
     private HttpResponse handleLogout(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
-        if (sessionId != null) {
-            server.getSessions().remove(sessionId);
-        }
+        assert (sessionId != null); // 返回一个当前尚未登陆的页面
 
-        // TODO：换一下这个默认界面
-        HttpResponse response = new HttpResponse(200, "OK", "text/html",
-                "<h1>Logged Out</h1><p><a href='/login'>Login again</a></p>");
-        response.eraseCookie("sessionId");
-        return response;
+        User user = server.getUsers().get(server.getSessions().get(sessionId).getUsername());
+        server.getSessions().remove(sessionId);
+
+        try {
+            // 读取文件内容
+            File file = new File("static/logout_success.html");
+            String content = new String(Files.readAllBytes(file.toPath()));
+            // 替换占位符
+            content = content.replace("{{ username }}", user.name());
+
+            HttpResponse httpResponse = new HttpResponse(200, "OK", "text/html", content.getBytes());
+            httpResponse.eraseCookie("sessionId");
+            return httpResponse;
+        } catch (IOException e) {
+            // 处理文件读取错误
+            return new HttpResponse(500, "Internal Server Error", "text/html",
+                    "<h1>500 Internal Server Error</h1><p>Error reading login success page: " + e.getMessage() + "</p>");
+        }
     }
 
     /**
@@ -212,7 +223,7 @@ public class RequestHandler implements Runnable {
 
         try {
             // 读取 admin.html 文件
-            File adminFile = new File("static\\admin.html");
+            File adminFile = new File("static/admin.html");
             if (adminFile.exists() && adminFile.isFile()) {
                 String content = new String(Files.readAllBytes(adminFile.toPath()));
                 
