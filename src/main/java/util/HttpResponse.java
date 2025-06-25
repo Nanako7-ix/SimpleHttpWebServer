@@ -30,6 +30,10 @@ public class HttpResponse {
         cookies.add(name + "=" + value + "; Path=/");
     }
 
+    public void eraseCookie(String name) {
+        cookies.add(name + "=DeleteCookie; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+    }
+
     public int getStatusCode() { return statusCode; }
     public String getStatusText() { return statusText; }
     public String getContentType() { return contentType; }
