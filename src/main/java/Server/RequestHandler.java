@@ -54,7 +54,7 @@ public class RequestHandler implements Runnable {
     /**
      * 解析 HTTP 请求报文
      * Body 是 String 类型, 不能上传二进制数据 (例如图片等)
-     * @return 一个HttpRequest 对象, 即 Http 请求报文
+     * @return HttpRequest对象，即 Http 请求报文
      */
     private HttpRequest parseRequest() throws IOException {
         String requestLine = in.readLine();
@@ -93,6 +93,11 @@ public class RequestHandler implements Runnable {
         return new HttpRequest(method, path, version, headers, body);
     }
 
+    /**
+     * 处理 HTTP 请求, 根据请求的路径调用不同的处理方法
+     * @param request 请求报文
+     * @return 响应报文
+     */
     private HttpResponse processRequest(HttpRequest request) {
         try {
             String path = request.path();
@@ -113,12 +118,14 @@ public class RequestHandler implements Runnable {
         }
     }
 
+    /**
+     * 处理登录请求
+     */
     private HttpResponse handleLogin(HttpRequest request) {
         if ("GET".equals(request.method())) {
             return handleStaticFile(new HttpRequest("GET", "/login.html", request.version(),
                     request.headers(), ""));
         } else if ("POST".equals(request.method())) {
-            // Process login
             Map<String, String> params = parseFormData(request.body());
             String username = params.get("username");
             String password = params.get("password");
@@ -131,6 +138,7 @@ public class RequestHandler implements Runnable {
                     Session session = new Session(sessionId, username);
                     server.getSessions().put(sessionId, session);
 
+                    // TODO：换一下这个默认界面
                     String response = "<h1>Login Successful</h1><p>Welcome, " + user.name() + "!</p>" +
                             "<p><a href='/admin'>Admin Panel</a> | <a href='/logout'>Logout</a></p>";
 
@@ -138,19 +146,19 @@ public class RequestHandler implements Runnable {
                     httpResponse.addCookie("sessionId", sessionId);
                     return httpResponse;
                 } else {
+                    // TODO：换一下这个默认界面
                     return new HttpResponse(401, "Unauthorized", "text/html",
                             "<h1>Login Failed</h1><p>Invalid credentials</p><a href='/login'>Try again</a>");
                 }
             }
         }
 
+        // TODO：换一下这个默认界面
         return new HttpResponse(400, "Bad Request", "text/html", "<h1>400 Bad Request</h1>");
     }
 
     /**
-     * 处理 /logout 请求
-     * 需要删除 sessionId 这个会话
-     * 同时清空 cookie
+     * 处理退出登录请求
      */
     private HttpResponse handleLogout(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
@@ -158,12 +166,16 @@ public class RequestHandler implements Runnable {
             server.getSessions().remove(sessionId);
         }
 
+        // TODO：换一下这个默认界面
         HttpResponse response = new HttpResponse(200, "OK", "text/html",
                 "<h1>Logged Out</h1><p><a href='/login'>Login again</a></p>");
         response.eraseCookie("sessionId");
         return response;
     }
 
+    /**
+     * 处理搜索请求
+     */
     private HttpResponse handleSearch(HttpRequest request) {
         if ("POST".equals(request.method())) {
             Map<String, String> params = parseFormData(request.body());
@@ -181,10 +193,7 @@ public class RequestHandler implements Runnable {
     }
 
     /**
-     * 处理 /admin 请求
-     * 当访问 /admin 时, 需要验证用户是否为 admin
-     * 如果是, 则返回一个管理界面, 显示服务器状态和操作链接
-     * 如果不是, 则返回 403 Forbidden
+     * 处理访问管理页面请求
      */
     private HttpResponse handleAdmin(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
@@ -215,21 +224,18 @@ public class RequestHandler implements Runnable {
     }
 
     /**
-     * 处理 /admin/shutdown 请求
-     * 当访问 /admin/shutdown 时, 需要验证用户是否为 admin
-     * 如果是, 则返回一个确认页面, 并在 2 秒后关闭服务器
-     * 如果不是, 则返回 403 Forbidden
+     * 处理关闭服务器请求
      */
     private HttpResponse handleShutdown(HttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
 
         if (session == null || !session.getUsername().equals("admin")) {
+            // TODO: 换一下这个默认界面
             return new HttpResponse(403, "Forbidden", "text/html",
                     "<h1>403 Forbidden</h1><p>Admin access required</p>");
         }
 
-        // 增加一个自动关闭服务器的线程, 5s 后调用 server.stop() 函数服务器
         new Thread(() -> {
             try {
                 Thread.sleep(5000);
@@ -241,9 +247,8 @@ public class RequestHandler implements Runnable {
         }).start();
 
         // TODO：换一下这个默认界面
-        // 返回一个操作成功的页面
         return new HttpResponse(200, "OK", "text/html",
-                "<h1>Server Shutting Down</h1><p>The server will shutdown in 2 seconds...</p>");
+                "<h1>Server Shutting Down</h1><p>The server will shutdown in 5 seconds...</p>");
     }
 
     /**
@@ -307,7 +312,7 @@ public class RequestHandler implements Runnable {
 
     /**
      * 解析表单数据
-     * @param body 请求体
+     * @param body 请求体, 来自 POST 请求 (登录和搜索)
      * @return 解析好的参数键值对
      */
     private Map<String, String> parseFormData(String body) {
