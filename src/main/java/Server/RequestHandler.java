@@ -8,9 +8,9 @@ import util.User;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.text.SimpleDateFormat;
-import java.net.URLDecoder;
 
 public class RequestHandler implements Runnable {
     private final Socket clientSocket;
@@ -138,13 +138,21 @@ public class RequestHandler implements Runnable {
                     Session session = new Session(sessionId, username);
                     server.getSessions().put(sessionId, session);
 
-                    // TODO：换一下这个默认界面
-                    String response = "<h1>Login Successful</h1><p>Welcome, " + user.name() + "!</p>" +
-                            "<p><a href='/admin'>Admin Panel</a> | <a href='/logout'>Logout</a></p>";
+                    try {
+                        // 读取文件内容
+                        File file = new File("static/login_success.html");
+                        String content = new String(Files.readAllBytes(file.toPath()));
+                        // 替换占位符
+                        content = content.replace("{{ username }}", user.name());
 
-                    HttpResponse httpResponse = new HttpResponse(200, "OK", "text/html", response);
-                    httpResponse.addCookie("sessionId", sessionId);
-                    return httpResponse;
+                        HttpResponse httpResponse = new HttpResponse(200, "OK", "text/html", content.getBytes());
+                        httpResponse.addCookie("sessionId", sessionId);
+                        return httpResponse;
+                    } catch (IOException e) {
+                        // 处理文件读取错误
+                        return new HttpResponse(500, "Internal Server Error", "text/html",
+                                "<h1>500 Internal Server Error</h1><p>Error reading login success page: " + e.getMessage() + "</p>");
+                    }
                 } else {
                     // TODO：换一下这个默认界面
                     return new HttpResponse(401, "Unauthorized", "text/html",
@@ -205,22 +213,35 @@ public class RequestHandler implements Runnable {
                     "<h1>403 Forbidden</h1><p>Admin access required</p><a href='/login'>Login</a>");
         }
 
-        long uptime = System.currentTimeMillis() - server.getStartTime().get();
-        // TODO：换一下这个默认界面
-        // 从后端发送数据到前端可能还要学一下怎么写
-        String response = "<h1>Server Administration</h1>" +
-                "<h2>Server Statistics</h2>" +
-                "<ul>" +
-                "<li>Active Connections: " + server.getActiveConnections().get() + "</li>" +
-                "<li>Total Requests: " + server.getTotalRequests().get() + "</li>" +
-                "<li>Uptime: " + (uptime / 1000) + " seconds</li>" +
-                "<li>Active Sessions: " + server.getSessions().size() + "</li>" +
-                "</ul>" +
-                "<h2>Actions</h2>" +
-                "<p><a href='/admin/shutdown'>Shutdown Server</a></p>" +
-                "<p><a href='/logout'>Logout</a></p>";
+        try {
+            // 读取 admin.html 文件
+            File adminFile = new File("static\\amdin.html");
+            if (adminFile.exists() && adminFile.isFile()) {
+                String content = new String(Files.readAllBytes(adminFile.toPath()));
+                
+                // 获取服务器数据
+                long activeConnections = server.getActiveConnections().get();
+                long totalRequests = server.getTotalRequests().get();
+                long startTime = server.getStartTime().get();
+                long uptime = (System.currentTimeMillis() - startTime) / 1000;
 
-        return new HttpResponse(200, "OK", "text/html", response);
+                // 替换占位符
+                content = content.replace("{{ activeConnections }}", String.valueOf(activeConnections));
+                content = content.replace("{{ totalRequests }}", String.valueOf(totalRequests));
+                content = content.replace("{{ startTime }}", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(startTime)));
+                content = content.replace("{{ uptime }}", String.valueOf(uptime));
+
+                return new HttpResponse(200, "OK", "text/html", content.getBytes());
+            } else {
+                // 文件不存在，返回 404
+                return new HttpResponse(404, "Not Found", "text/html",
+                        "<h1>404 Not Found</h1><p>The admin page was not found.</p>");
+            }
+        } catch (IOException e) {
+            // 读取文件出错，返回 500
+            return new HttpResponse(500, "Internal Server Error", "text/html",
+                    "<h1>500 Internal Server Error</h1><p>Error reading admin page: " + e.getMessage() + "</p>");
+        }
     }
 
     /**
