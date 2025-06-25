@@ -244,7 +244,7 @@ public class RequestHandler implements Runnable {
     }
 
     /**
-     *
+     * 根据请求的路径处理静态文件
      * @param request
      * @return
      */
@@ -256,6 +256,7 @@ public class RequestHandler implements Runnable {
 
         File file = new File("static" + path);
         if (!file.exists() || file.isDirectory()) {
+            // TODO：换一下这个默认界面
             return new HttpResponse(404, "Not Found", "text/html",
                     "<h1>404 Not Found</h1><p>The requested resource was not found.</p>");
         }
@@ -266,6 +267,7 @@ public class RequestHandler implements Runnable {
 
             return new HttpResponse(200, "OK", mimeType, content);
         } catch (IOException e) {
+            // TODO: 换一下这个默认界面
             return new HttpResponse(500, "Internal Server Error", "text/html",
                     "<h1>500 Internal Server Error</h1><p>Error reading file: " + e.getMessage() + "</p>");
         }
