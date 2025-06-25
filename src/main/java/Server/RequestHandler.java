@@ -280,6 +280,12 @@ public class RequestHandler implements Runnable {
             path = "/index.html";
         }
 
+        if (path.equals("/index.html") && getCookieValue(request, "sessionId") == null) {
+            // 如果是 index.html 且没有 SessionId, 重定向到登录页面
+            return new HttpResponse(302, "Found", "text/html",
+                    "<h1>Redirecting...</h1><p>You are not logged in. Redirecting to <a href='/login'>login page</a>.</p>");
+        }
+
         File file = new File("static" + path);
         if (!file.exists() || file.isDirectory()) {
             // TODO：换一下这个默认界面
@@ -305,15 +311,12 @@ public class RequestHandler implements Runnable {
      * @param response 需要发送的 HTTP 响应对象
      */
     private void sendResponse(HttpResponse response) throws IOException {
-        // 状态行
         out.println("HTTP/1.1 " + response.getStatusCode() + " " + response.getStatusText());
 
-        // 响应头
         out.println("Content-Type: " + response.getContentType());
         out.println("Content-Length: " + response.getContentLength());
         out.println("Server: CustomHTTPServer/1.0");
         out.println("Date: " + new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH).format(new Date()));
-        // 支持 Cookie
         for (String cookie : response.getCookies()) {
             out.println("Set-Cookie: " + cookie);
         }
@@ -321,7 +324,6 @@ public class RequestHandler implements Runnable {
         out.println();
         out.flush();
 
-        // 响应体 其中 getContent() 返回的是 byte[] 类型
         if (response.getContent() != null) {
             outputStream.write(response.getContent());
             outputStream.flush();
@@ -377,18 +379,11 @@ public class RequestHandler implements Runnable {
         return UUID.randomUUID().toString();
     }
 
+    /**
+     * 使用枚举 MimeType 来获取文件的 MIME 类型
+     */
     private String getMimeType(String fileName) {
         MimeType mimeType = MimeType.fromFilename(fileName);
         return mimeType.getMimeType();
-    }
-
-    private boolean isTextFile(String fileName) {
-        MimeType mimeType = MimeType.fromFilename(fileName);
-        return mimeType.isText();
-    }
-
-    private boolean isImageFile(String fileName) {
-        MimeType mimeType = MimeType.fromFilename(fileName);
-        return mimeType.isImage();
     }
 }

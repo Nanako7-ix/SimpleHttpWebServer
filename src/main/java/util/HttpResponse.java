@@ -2,6 +2,9 @@ package util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+
 
 public class HttpResponse {
     private final int statusCode;
@@ -9,6 +12,7 @@ public class HttpResponse {
     private final String contentType;
     private final byte[] content;
     private final List<String> cookies;
+    private final Map<String, String> headers;
 
     public HttpResponse(int statusCode, String statusText, String contentType, String content) {
         this.statusCode = statusCode;
@@ -16,6 +20,7 @@ public class HttpResponse {
         this.contentType = contentType;
         this.content = content.getBytes();
         this.cookies = new ArrayList<>();
+        this.headers = new HashMap<>();
     }
 
     public HttpResponse(int statusCode, String statusText, String contentType, byte[] content) {
@@ -24,6 +29,11 @@ public class HttpResponse {
         this.contentType = contentType;
         this.content = content;
         this.cookies = new ArrayList<>();
+        this.headers = new HashMap<>();
+    }
+
+    public void addHeader(String key, String value) {
+        headers.put(key, value);
     }
 
     public void addCookie(String name, String value) {
@@ -40,4 +50,5 @@ public class HttpResponse {
     public byte[] getContent() { return content; }
     public int getContentLength() { return content != null ? content.length : 0; }
     public List<String> getCookies() { return cookies; }
+    public Map<String, String> getHeaders() { return headers; }
 }
