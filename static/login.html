@@ -1,11 +1,143 @@
 <!DOCTYPE html>
-<html lang="en"><head><title>Login</title></head>
+<html lang="en">
+<head>
+    <title>Login</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-color: #ecf0f1;
+            --error-color: #e74c3c;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #3498db, #2c3e50);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .login-container {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 400px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
+        }
+
+        input::placeholder {
+            color: #999;
+        }
+
+        .icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .demo-info {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .error-message {
+            color: var(--error-color);
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 30px;
+            }
+        }
+    </style>
+</head>
 <body>
-<h2>Login</h2>
-<form action='/login' method='POST'>
-<input type='text' name='username' placeholder='Username' required><br><br>
-<input type='password' name='password' placeholder='Password' required><br><br>
-<input type='submit' value='Login'>
-</form>
-<p>Demo users: admin/password, user/123456</p>
-</body></html>
+    <div class="login-container">
+        <h2>用户登录</h2>
+        <form action='/login' method='POST'>
+            <div class="form-group">
+                <input type='text' name='username' placeholder='用户名' required>
+                <i class="icon far fa-user"></i>
+            </div>
+            <div class="form-group">
+                <input type='password' name='password' placeholder='密码' required>
+                <i class="icon far fa-lock"></i>
+            </div>
+            <button type="submit">登录</button>
+        </form>
+        <div class="demo-info">
+            演示账号：<br>
+            管理员: admin / password <br>
+            普通用户: user / 123456
+        </div>
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+    <!-- 如果你需要图标功能，可引入 Font Awesome -->
+    <!-- <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script> -->
+</body>
+</html>
