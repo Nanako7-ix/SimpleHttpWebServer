@@ -212,7 +212,7 @@ public class RequestHandler implements Runnable {
 
         try {
             // 读取 admin.html 文件
-            File adminFile = new File("static\\amdin.html");
+            File adminFile = new File("static\\admin.html");
             if (adminFile.exists() && adminFile.isFile()) {
                 String content = new String(Files.readAllBytes(adminFile.toPath()));
                 
@@ -282,8 +282,9 @@ public class RequestHandler implements Runnable {
 
         if (path.equals("/index.html") && getCookieValue(request, "sessionId") == null) {
             // 如果是 index.html 且没有 SessionId, 重定向到登录页面
-            return new HttpResponse(302, "Found", "text/html",
-                    "<h1>Redirecting...</h1><p>You are not logged in. Redirecting to <a href='/login'>login page</a>.</p>");
+            HttpResponse response = new HttpResponse(302, "Found", "text/html", "");
+            response.addHeader("Location", "/login");
+            return response;
         }
 
         File file = new File("static" + path);
@@ -317,6 +318,9 @@ public class RequestHandler implements Runnable {
         out.println("Content-Length: " + response.getContentLength());
         out.println("Server: CustomHTTPServer/1.0");
         out.println("Date: " + new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH).format(new Date()));
+        for (Map.Entry<String, String> header : response.getHeaders().entrySet()) {
+            out.println(header.getKey() + ": " + header.getValue());
+        }
         for (String cookie : response.getCookies()) {
             out.println("Set-Cookie: " + cookie);
         }
