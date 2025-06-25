@@ -256,31 +256,41 @@ public class RequestHandler implements Runnable {
         }
     }
 
+    /**
+     * 发送 HTTP 响应报文
+     * 这里默认使用 HTTP/1.1 协议, 根据加分项, 这里需要支持 HTTPS
+     * @param response 需要发送的 HTTP 响应对象
+     * @throws IOException
+     */
     private void sendResponse(HttpResponse response) throws IOException {
-        // Send status line
+        // 状态行
         out.println("HTTP/1.1 " + response.getStatusCode() + " " + response.getStatusText());
 
-        // Send headers
+        // 响应头
         out.println("Content-Type: " + response.getContentType());
         out.println("Content-Length: " + response.getContentLength());
         out.println("Server: CustomHTTPServer/1.0");
         out.println("Date: " + new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz").format(new Date()));
-
-        // Send cookies
+        // 支持 Cookie
         for (String cookie : response.getCookies()) {
             out.println("Set-Cookie: " + cookie);
         }
 
-        out.println(); // Empty line to end headers
+        out.println();
         out.flush();
 
-        // Send body
+        // 响应体 其中 getContent() 返回的是 byte[] 类型
         if (response.getContent() != null) {
             outputStream.write(response.getContent());
             outputStream.flush();
         }
     }
 
+    /**
+     * 解析表单数据
+     * @param body 请求体
+     * @return 解析好的参数键值对
+     */
     private Map<String, String> parseFormData(String body) {
         Map<String, String> params = new HashMap<>();
         if (body != null && !body.isEmpty()) {
