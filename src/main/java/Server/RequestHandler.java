@@ -1,0 +1,330 @@
+package Server;
+
+import util.HttpRequest;
+import util.HttpResponse;
+import util.Session;
+import util.User;
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import java.text.SimpleDateFormat;
+import java.net.URLDecoder;
+
+public class RequestHandler implements Runnable {
+    private final Socket clientSocket;
+    private final HttpWebServer server;
+    private BufferedReader in;
+    private PrintWriter out;
+    private OutputStream outputStream;
+
+    public RequestHandler(Socket socket, HttpWebServer server) {
+        this.clientSocket = socket;
+        this.server = server;
+    }
+
+    @Override
+    public void run() {
+        try {
+            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            outputStream = clientSocket.getOutputStream();
+            out = new PrintWriter(outputStream, true);
+
+            HttpRequest request = parseRequest();
+            if (request != null) {
+                HttpResponse response = processRequest(request);
+                sendResponse(response);
+
+                server.getLogger().log(request, response, clientSocket.getInetAddress());
+            }
+
+        } catch (IOException e) {
+            System.err.println("Error handling request: " + e.getMessage());
+        } finally {
+            server.getActiveConnections().decrementAndGet();
+            try {
+                clientSocket.close();
+            } catch (IOException e) {
+                System.err.println("Error closing client socket: " + e.getMessage());
+            }
+        }
+    }
+
+    private HttpRequest parseRequest() throws IOException {
+        String requestLine = in.readLine();
+        if (requestLine == null || requestLine.isEmpty()) {
+            return null;
+        }
+
+        String[] parts = requestLine.split(" ");
+        if (parts.length != 3) {
+            return null;
+        }
+
+        String method = parts[0];
+        String path = parts[1];
+        String version = parts[2];
+
+        Map<String, String> headers = new HashMap<>();
+        String line;
+        while ((line = in.readLine()) != null && !line.isEmpty()) {
+            int colonIndex = line.indexOf(':');
+            if (colonIndex > 0) {
+                String key = line.substring(0, colonIndex).trim().toLowerCase();
+                String value = line.substring(colonIndex + 1).trim();
+                headers.put(key, value);
+            }
+        }
+
+        String body = "";
+        if ("POST".equals(method) && headers.containsKey("content-length")) {
+            int contentLength = Integer.parseInt(headers.get("content-length"));
+            char[] bodyChars = new char[contentLength];
+            in.read(bodyChars, 0, contentLength);
+            body = new String(bodyChars);
+        }
+
+        return new HttpRequest(method, path, version, headers, body);
+    }
+
+    private HttpResponse processRequest(HttpRequest request) {
+        try {
+            String path = request.path();
+            String method = request.method();
+
+            // Handle dynamic routes
+            if (path.equals("/login")) {
+                return handleLogin(request);
+            } else if (path.equals("/logout")) {
+                return handleLogout(request);
+            } else if (path.equals("/search")) {
+                return handleSearch(request);
+            } else if (path.equals("/admin")) {
+                return handleAdmin(request);
+            } else if (path.equals("/admin/shutdown")) {
+                return handleShutdown(request);
+            } else {
+                // Handle static files
+                return handleStaticFile(request);
+            }
+
+        } catch (Exception e) {
+            return new HttpResponse(500, "Internal Server Error",
+                    "text/html", "<h1>500 Internal Server Error</h1><p>" + e.getMessage() + "</p>");
+        }
+    }
+
+    private HttpResponse handleLogin(HttpRequest request) {
+        if ("GET".equals(request.method())) {
+            // Serve login page
+            return handleStaticFile(new HttpRequest("GET", "/login.html", request.version(),
+                    request.headers(), ""));
+        } else if ("POST".equals(request.method())) {
+            // Process login
+            Map<String, String> params = parseFormData(request.body());
+            String username = params.get("username");
+            String password = params.get("password");
+
+            if (username != null && password != null) {
+                User user = server.getUsers().get(username);
+                if (user != null && user.password().equals(password)) {
+                    // Create session
+                    String sessionId = generateSessionId();
+                    Session session = new Session(sessionId, username);
+                    server.getSessions().put(sessionId, session);
+
+                    String response = "<h1>Login Successful</h1><p>Welcome, " + user.name() + "!</p>" +
+                            "<p><a href='/admin'>Admin Panel</a> | <a href='/logout'>Logout</a></p>";
+
+                    HttpResponse httpResponse = new HttpResponse(200, "OK", "text/html", response);
+                    httpResponse.addCookie("sessionId", sessionId);
+                    return httpResponse;
+                } else {
+                    return new HttpResponse(401, "Unauthorized", "text/html",
+                            "<h1>Login Failed</h1><p>Invalid credentials</p><a href='/login'>Try again</a>");
+                }
+            }
+        }
+
+        return new HttpResponse(400, "Bad Request", "text/html", "<h1>400 Bad Request</h1>");
+    }
+
+    private HttpResponse handleLogout(HttpRequest request) {
+        String sessionId = getCookieValue(request, "sessionId");
+        if (sessionId != null) {
+            server.getSessions().remove(sessionId);
+        }
+
+        HttpResponse response = new HttpResponse(200, "OK", "text/html",
+                "<h1>Logged Out</h1><p><a href='/login'>Login again</a></p>");
+        response.addCookie("sessionId", ""); // Clear cookie
+        return response;
+    }
+
+    private HttpResponse handleSearch(HttpRequest request) {
+        if ("POST".equals(request.method())) {
+            Map<String, String> params = parseFormData(request.body());
+            String query = params.get("query");
+
+            String response = "<h1>Search Results</h1><p>You searched for: <strong>" +
+                    (query != null ? query : "nothing") + "</strong></p>" +
+                    "<p>This is a demo search. In a real application, you would query a database.</p>" +
+                    "<p><a href='/'>Back to home</a></p>";
+
+            return new HttpResponse(200, "OK", "text/html", response);
+        }
+
+        return new HttpResponse(405, "Method Not Allowed", "text/html", "<h1>405 Method Not Allowed</h1>");
+    }
+
+    private HttpResponse handleAdmin(HttpRequest request) {
+        String sessionId = getCookieValue(request, "sessionId");
+        Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
+
+        if (session == null || !session.getUsername().equals("admin")) {
+            return new HttpResponse(403, "Forbidden", "text/html",
+                    "<h1>403 Forbidden</h1><p>Admin access required</p><a href='/login'>Login</a>");
+        }
+
+        long uptime = System.currentTimeMillis() - server.getStartTime().get();
+        String response = "<h1>Server Administration</h1>" +
+                "<h2>Server Statistics</h2>" +
+                "<ul>" +
+                "<li>Active Connections: " + server.getActiveConnections().get() + "</li>" +
+                "<li>Total Requests: " + server.getTotalRequests().get() + "</li>" +
+                "<li>Uptime: " + (uptime / 1000) + " seconds</li>" +
+                "<li>Active Sessions: " + server.getSessions().size() + "</li>" +
+                "</ul>" +
+                "<h2>Actions</h2>" +
+                "<p><a href='/admin/shutdown'>Shutdown Server</a></p>" +
+                "<p><a href='/logout'>Logout</a></p>";
+
+        return new HttpResponse(200, "OK", "text/html", response);
+    }
+
+    private HttpResponse handleShutdown(HttpRequest request) {
+        String sessionId = getCookieValue(request, "sessionId");
+        Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
+
+        if (session == null || !session.getUsername().equals("admin")) {
+            return new HttpResponse(403, "Forbidden", "text/html",
+                    "<h1>403 Forbidden</h1><p>Admin access required</p>");
+        }
+
+        // Schedule shutdown
+        new Thread(() -> {
+            try {
+                Thread.sleep(2000); // Give time to send response
+                server.stop();
+                System.exit(0);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
+
+        return new HttpResponse(200, "OK", "text/html",
+                "<h1>Server Shutting Down</h1><p>The server will shutdown in 2 seconds...</p>");
+    }
+
+    private HttpResponse handleStaticFile(HttpRequest request) {
+        String path = request.path();
+        if (path.equals("/")) {
+            path = "/index.html";
+        }
+
+        File file = new File("static" + path);
+        if (!file.exists() || file.isDirectory()) {
+            return new HttpResponse(404, "Not Found", "text/html",
+                    "<h1>404 Not Found</h1><p>The requested resource was not found.</p>");
+        }
+
+        try {
+            byte[] content = java.nio.file.Files.readAllBytes(file.toPath());
+            String mimeType = getMimeType(file.getName());
+
+            return new HttpResponse(200, "OK", mimeType, content);
+        } catch (IOException e) {
+            return new HttpResponse(500, "Internal Server Error", "text/html",
+                    "<h1>500 Internal Server Error</h1><p>Error reading file: " + e.getMessage() + "</p>");
+        }
+    }
+
+    private void sendResponse(HttpResponse response) throws IOException {
+        // Send status line
+        out.println("HTTP/1.1 " + response.getStatusCode() + " " + response.getStatusText());
+
+        // Send headers
+        out.println("Content-Type: " + response.getContentType());
+        out.println("Content-Length: " + response.getContentLength());
+        out.println("Server: CustomHTTPServer/1.0");
+        out.println("Date: " + new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz").format(new Date()));
+
+        // Send cookies
+        for (String cookie : response.getCookies()) {
+            out.println("Set-Cookie: " + cookie);
+        }
+
+        out.println(); // Empty line to end headers
+        out.flush();
+
+        // Send body
+        if (response.getContent() != null) {
+            outputStream.write(response.getContent());
+            outputStream.flush();
+        }
+    }
+
+    private Map<String, String> parseFormData(String body) {
+        Map<String, String> params = new HashMap<>();
+        if (body != null && !body.isEmpty()) {
+            String[] pairs = body.split("&");
+            for (String pair : pairs) {
+                String[] keyValue = pair.split("=", 2);
+                if (keyValue.length == 2) {
+                    try {
+                        String key = URLDecoder.decode(keyValue[0], "UTF-8");
+                        String value = URLDecoder.decode(keyValue[1], "UTF-8");
+                        params.put(key, value);
+                    } catch (UnsupportedEncodingException e) {
+                        // Ignore malformed parameters
+                    }
+                }
+            }
+        }
+        return params;
+    }
+
+    private String getCookieValue(HttpRequest request, String cookieName) {
+        String cookieHeader = request.headers().get("cookie");
+        if (cookieHeader != null) {
+            String[] cookies = cookieHeader.split(";");
+            for (String cookie : cookies) {
+                String[] parts = cookie.trim().split("=", 2);
+                if (parts.length == 2 && parts[0].equals(cookieName)) {
+                    return parts[1];
+                }
+            }
+        }
+        return null;
+    }
+
+    private String generateSessionId() {
+        return UUID.randomUUID().toString();
+    }
+
+    private String getMimeType(String fileName) {
+        String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
+        switch (extension) {
+            case "html": case "htm": return "text/html";
+            case "css": return "text/css";
+            case "js": return "application/javascript";
+            case "json": return "application/json";
+            case "png": return "image/png";
+            case "jpg": case "jpeg": return "image/jpeg";
+            case "gif": return "image/gif";
+            case "ico": return "image/x-icon";
+            case "txt": return "text/plain";
+            default: return "application/octet-stream";
+        }
+    }
+}
