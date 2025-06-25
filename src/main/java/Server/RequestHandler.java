@@ -178,24 +178,24 @@ public class RequestHandler implements Runnable {
         return response;
     }
 
-    /**
-     * 处理搜索请求
-     */
-    private HttpResponse handleSearch(HttpRequest request) {
-        if ("POST".equals(request.method())) {
-            Map<String, String> params = parseFormData(request.body());
-            String query = params.get("query");
+    // /**
+    //  * 处理搜索请求
+    //  */
+    // private HttpResponse handleSearch(HttpRequest request) {
+    //     if ("POST".equals(request.method())) {
+    //         Map<String, String> params = parseFormData(request.body());
+    //         String query = params.get("query");
 
-            String response = "<h1>Search Results</h1><p>You searched for: <strong>" +
-                    (query != null ? query : "nothing") + "</strong></p>" +
-                    "<p>This is a demo search. In a real application, you would query a database.</p>" +
-                    "<p><a href='/'>Back to home</a></p>";
+    //         String response = "<h1>Search Results</h1><p>You searched for: <strong>" +
+    //                 (query != null ? query : "nothing") + "</strong></p>" +
+    //                 "<p>This is a demo search. In a real application, you would query a database.</p>" +
+    //                 "<p><a href='/'>Back to home</a></p>";
 
-            return new HttpResponse(200, "OK", "text/html", response);
-        }
+    //         return new HttpResponse(200, "OK", "text/html", response);
+    //     }
 
-        return new HttpResponse(405, "Method Not Allowed", "text/html", "<h1>405 Method Not Allowed</h1>");
-    }
+    //     return new HttpResponse(405, "Method Not Allowed", "text/html", "<h1>405 Method Not Allowed</h1>");
+    // }
 
     /**
      * 处理访问管理页面请求
@@ -306,6 +306,46 @@ public class RequestHandler implements Runnable {
         }
     }
 
+    /**
+     * 处理仓库的文件搜索请求
+     */
+    private HttpResponse handleSearch(HttpRequest request) {
+        String query = extractQueryParam(request.path());
+        
+        // 获取仓库文件列表
+        File filDir = new File(HttpWebServer.RECOURSES_DIR);
+        File[] files = filDir.listFiles();
+        
+        // 生成HTML列表
+        StringBuilder html = new StringBuilder();
+        html.append("<h1>File Repository</h1>");
+        html.append("<form action='/repo' method='get'>");
+        html.append("<input type='text' name='q' placeholder='Search files...'>");
+        html.append("<button type='submit'>Search</button>");
+        html.append("</form><hr>");
+        
+        if (files != null) 
+            for (File file : files) 
+                if (query == null || file.getName().contains(query)) 
+                    html.append("<div>")
+                        .append(file.getName())
+                        .append(" <a href='/repo/").append(file.getName()).append("'>Download</a>")
+                        .append("</div>");
+                        
+        return new HttpResponse(200, "OK", "text/html", html.toString().getBytes());
+    }
+
+    // 从路径提取查询参数 ?q=search
+    private String extractQueryParam(String path) {
+        if (path.contains("?")) {
+            String query = path.split("\\?")[1];
+            for (String param : query.split("&")) 
+                if (param.startsWith("q=")) 
+                    return URLDecoder.decode(param.substring(2), StandardCharsets.UTF_8);
+        }
+        return null;
+    }
+    
     /**
      * 发送 HTTP 响应报文
      * 这里默认使用 HTTP/1.1 协议, 根据加分项, 这里需要支持 HTTPS

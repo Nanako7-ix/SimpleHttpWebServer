@@ -19,6 +19,7 @@ public class HttpWebServer {
     private static final int THREAD_POOL_SIZE = 50;
     private static final String STATIC_DIR = "static";
     private static final String LOG_FILE = "access.log";
+    static final String RECOURSES_DIR = "static/recourses";
     
     private ServerSocket serverSocket;
     private SSLServerSocket sslServerSocket;
