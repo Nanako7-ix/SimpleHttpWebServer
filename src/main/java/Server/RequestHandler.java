@@ -50,6 +50,12 @@ public class RequestHandler implements Runnable {
         }
     }
 
+    /**
+     * Parses the HTTP request from the client.
+     * Body is String, so can not handle binary data.
+     * @return HttpRequest object containing the request details, or null if the request is invalid.
+     * @throws IOException
+     */
     private HttpRequest parseRequest() throws IOException {
         String requestLine = in.readLine();
         if (requestLine == null || requestLine.isEmpty()) {
@@ -312,19 +318,22 @@ public class RequestHandler implements Runnable {
         return UUID.randomUUID().toString();
     }
 
+    /**
+     *  简单的类型猜测 感觉可以完善一点？
+     */
     private String getMimeType(String fileName) {
         String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
-        switch (extension) {
-            case "html": case "htm": return "text/html";
-            case "css": return "text/css";
-            case "js": return "application/javascript";
-            case "json": return "application/json";
-            case "png": return "image/png";
-            case "jpg": case "jpeg": return "image/jpeg";
-            case "gif": return "image/gif";
-            case "ico": return "image/x-icon";
-            case "txt": return "text/plain";
-            default: return "application/octet-stream";
-        }
+        return switch (extension) {
+            case "html", "htm" -> "text/html";
+            case "css" -> "text/css";
+            case "js" -> "application/javascript";
+            case "json" -> "application/json";
+            case "png" -> "image/png";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "gif" -> "image/gif";
+            case "ico" -> "image/x-icon";
+            case "txt" -> "text/plain";
+            default -> "application/octet-stream";
+        };
     }
 }
