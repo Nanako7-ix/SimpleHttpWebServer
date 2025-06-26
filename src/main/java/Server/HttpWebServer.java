@@ -55,7 +55,9 @@ public class HttpWebServer {
     
     public void start(int port, boolean enableHttps) throws IOException {
         // Start HTTP server
-        serverSocket = new ServerSocket(port);
+        //修改为IPV6的绑定方式
+        serverSocket = new ServerSocket();
+        serverSocket.bind(new InetSocketAddress("::0",port));
         running = true;
         
         System.out.println("HTTP Server started on port " + port);
