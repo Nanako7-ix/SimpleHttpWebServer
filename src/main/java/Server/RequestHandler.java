@@ -275,7 +275,6 @@ public class RequestHandler implements Runnable {
      * 处理访问管理页面请求
      */
     private HttpResponse handleAdmin(HttpRequest request) {
-        System.out.println(123);
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
 
