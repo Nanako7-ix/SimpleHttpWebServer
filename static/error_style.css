@@ -2,7 +2,7 @@
 :root {
     --error-primary: #2c3e50;
     --error-accent: #ff8a90;
-    --error-bg: linear-gradient(135deg, #ea96f0, #ff5fa4);
+    --error-bg: linear-gradient(135deg, #ee6384, #8a0724);
     --error-text: #2c3e50;
     --error-card: rgba(255, 255, 255, 1);
 }
@@ -62,7 +62,7 @@ body.error-page {
     padding: 20px;
     border-radius: 10px;
     font-size: 1.2rem;
-    text-align: left;
+    text-align: center;
     overflow-x: auto;
     max-height: 200px;
     overflow-y: auto;
