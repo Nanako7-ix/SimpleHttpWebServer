@@ -355,13 +355,6 @@ public class RequestHandler implements Runnable {
             path = "/index.html";
         }
 
-//        if (path.equals("/index.html") && getCookieValue(request, "sessionId") == null) {
-//            // 如果是 index.html 且没有 SessionId, 重定向到登录页面
-//            HttpResponse response = new HttpResponse(302, "Found", "text/html", "");
-//            response.addHeader("Location", "/login");
-//            return response;
-//        }
-
         File file = new File("static" + path);
         if (!file.exists() || file.isDirectory()) {
             // TODO：换一下这个默认界面
