@@ -1,5 +1,9 @@
 package Server;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
 import util.*;
 
 import java.io.*;
@@ -9,16 +13,39 @@ import java.nio.file.Files;
 import java.util.*;
 import java.text.SimpleDateFormat;
 
-public class RequestHandler implements Runnable {
-    private final Socket clientSocket;
+public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private final HttpWebServer server;
     private BufferedReader in;
     private PrintWriter out;
     private OutputStream outputStream;
 
-    public RequestHandler(Socket socket, HttpWebServer server) {
-        this.clientSocket = socket;
+    public RequestHandler(HttpWebServer server) {
         this.server = server;
+    }
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+        FullHttpResponse response;
+        try {
+            String uri = request.uri();
+            String path = uri.contains("?") ? uri.substring(0, uri.indexOf('?')) : uri;
+            System.out.println(uri);
+            response = switch (path) {
+                case "/login" -> handleLogin(request);
+                case "/logout" -> handleLogout(request);
+                case "/search" -> handleSearch(request);
+                case "/repo" -> handleDownload(request);
+                case "/admin" -> handleAdmin(request);
+                case "/admin/shutdown" -> handleShutdown(request);
+                case "/admin/connections" -> handleConnectionsCount(request);
+                default -> handleStaticFile(request);
+            }
+        } catch (Exception e) {
+            response = new HttpResponse(500, "Internal Server Error", "text/html",
+                    errorHTMLPage(500, "Internal Server Error", "Internal Server Error: " + e.getMessage()));
+        }
+        
+        ctx.writeAndFlush(response);
     }
 
     @Override

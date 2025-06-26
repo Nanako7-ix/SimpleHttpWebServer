@@ -1,7 +1,5 @@
 package Server;
 
-import java.io.IOException;
-
 public class ServerRunner {
     static final int HTTP_PORT = 8080;
     static final int HTTPS_PORT = 8443;
@@ -20,10 +18,6 @@ public class ServerRunner {
         HttpWebServer server = new HttpWebServer();
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
 
-        try {
-            server.start(HTTP_PORT, HTTPS_PORT);
-        } catch (IOException e) {
-            System.err.println("Failed to start server: " + e.getMessage());
-        }
+        server.start(HTTP_PORT, HTTPS_PORT);
     }
 }

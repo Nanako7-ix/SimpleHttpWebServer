@@ -1,29 +1,35 @@
 package Server;
 
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import util.Session;
 import util.User;
 
 import java.io.*;
-import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.security.SecureRandom;
 import java.util.*;
 import javax.net.ssl.*;
 import java.security.KeyStore;
 
 public class HttpWebServer {
-    private static final int THREAD_POOL_SIZE = 50;
     private static final String LOG_FILE = "access.log";
     static final String RECOURSES_DIR = "static/recourses";
     private static final String SESSIONS_FILE = "sessions.dat";
 
-    private ServerSocket serverSocket;
-    private SSLServerSocket sslServerSocket;
-    private final ExecutorService threadPool;
+    private EventLoopGroup bossGroup;
+    private EventLoopGroup workerGroup;
+    private Channel httpServerChannel;
+    private Channel httpsServerChannel;
     private volatile boolean running = false;
 
     private final AtomicInteger activeConnections = new AtomicInteger(0);
@@ -36,9 +42,7 @@ public class HttpWebServer {
     private final RequestLogger logger;
     
     public HttpWebServer() {
-        this.threadPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
         this.logger = new RequestLogger(LOG_FILE);
-
         users.put("admin", new User("admin", "password", "Administrator"));
         users.put("user", new User("user", "123456", "Regular User"));
     }
@@ -72,89 +76,80 @@ public class HttpWebServer {
         }
     }
 
-    public void start(int http_port, int https_port) throws IOException {
+    public void start(int http_port, int https_port) {
         loadSessions();
-
-        serverSocket = new ServerSocket();
-        serverSocket.bind(new InetSocketAddress("::0", http_port));
+        bossGroup = new NioEventLoopGroup(1);
+        workerGroup = new NioEventLoopGroup();
         running = true;
         
-        System.out.println("HTTP Server started on port " + http_port);
-
+        // Start HTTP server
+        ServerBootstrap httpBootstrap = new ServerBootstrap();
         try {
-            setupSSL(https_port);
-            new Thread(() -> {
-                try {
-                    handleHttpsConnections();
-                } catch (IOException e) {
-                    System.err.println("HTTPS server error: " + e.getMessage());
-                }
-            }).start();
-        } catch (Exception e) {
-            System.err.println("Failed to start HTTPS server: " + e.getMessage());
+            httpBootstrap.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel ch) {
+                            ch.pipeline()
+                              .addLast(new HttpServerCodec())
+                              .addLast(new HttpObjectAggregator(65536))
+                              .addLast(new RequestHandler(HttpWebServer.this));
+                        }
+                    });
+            httpServerChannel = httpBootstrap.bind(http_port).sync().channel();
+            System.out.println("HTTP Server started on port " + http_port);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
 
-        handleConnections();
+        ServerBootstrap httpsBootstrap = new ServerBootstrap();
+        try {
+            SslContext sslCtx = setupSSL();
+            httpsBootstrap.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel ch) {
+                            ch.pipeline()
+                              .addLast(sslCtx.newHandler(ch.alloc()))
+                              .addLast(new HttpServerCodec())
+                              .addLast(new HttpObjectAggregator(65536))
+                              .addLast(new RequestHandler(HttpWebServer.this));
+                        }
+                    });
+            httpsServerChannel = httpsBootstrap.bind(https_port).sync().channel();
+            System.out.println("HTTPS Server started on port " + https_port);
+        } catch (Exception e) {
+            System.out.println("Failed to start HTTPS server: " + e.getMessage());
+        }
     }
     
-    private void setupSSL(int https_port) throws Exception {
+    private SslContext setupSSL() throws Exception {
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (InputStream keyStoreStream = Files.newInputStream(Paths.get("keystore.p12"))) {
             keyStore.load(keyStoreStream, "123456".toCharArray());
         }
 
-        SSLContext sslContext = SSLContext.getInstance("TLS");
         KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(keyStore, "123456".toCharArray());
-        
-        sslContext.init(kmf.getKeyManagers(), null, new SecureRandom());
-        sslServerSocket = (SSLServerSocket) sslContext.getServerSocketFactory()
-                            .createServerSocket(https_port);
+
+        return SslContextBuilder.forServer(kmf).build();
     }
-    
-    private void handleConnections() {
-        while (running) {
-            try {
-                Socket clientSocket = serverSocket.accept();
-                activeConnections.incrementAndGet();
-                totalRequests.incrementAndGet();
-                
-                threadPool.submit(new RequestHandler(clientSocket, this));
-            } catch (IOException e) {
-                if (running) {
-                    System.err.println("Error accepting connection: " + e.getMessage());
-                }
-            }
-        }
-    }
-    
-    private void handleHttpsConnections() throws IOException {
-        while (running && sslServerSocket != null) {
-            try {
-                Socket clientSocket = sslServerSocket.accept();
-                activeConnections.incrementAndGet();
-                totalRequests.incrementAndGet();
-                
-                threadPool.submit(new RequestHandler(clientSocket, this));
-            } catch (IOException e) {
-                if (running) {
-                    System.err.println("Error accepting HTTPS connection: " + e.getMessage());
-                }
-            }
-        }
-    }
-    
+
     public void stop() {
+        if (!running) return;
+
         running = false;
         saveSessions();
         try {
-            if (serverSocket != null) serverSocket.close();
-            if (sslServerSocket != null) sslServerSocket.close();
-            threadPool.shutdown();
+            if (httpServerChannel != null) httpServerChannel.close().sync();
+            if (httpsServerChannel != null) httpsServerChannel.close().sync();
+            if (workerGroup != null) workerGroup.shutdownGracefully().sync();
+            if (bossGroup != null) bossGroup.shutdownGracefully().sync();
             logger.close();
             System.out.println("Server stopped");
-        } catch (IOException e) {
-            System.err.println("Error stopping server: " + e.getMessage());
+        } catch (InterruptedException e) {
+            System.out.println("Error stopping server: " + e.getMessage());
         }
     }
 
