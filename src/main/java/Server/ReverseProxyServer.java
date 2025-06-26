@@ -22,8 +22,6 @@ public class ReverseProxyServer {
     private static class BackendServer {
         final int port;
         int activeConnections;
-        long lastUpdated;
-
         BackendServer(int port) {
             this.port = port;
         }
@@ -56,7 +54,7 @@ public class ReverseProxyServer {
                     if (line.isEmpty()) inBody = true;
                     if (inBody) {
                         server.activeConnections = Integer.parseInt(line.trim());
-                        server.lastUpdated = System.currentTimeMillis();
+                        System.currentTimeMillis();
                         break;
                     }
                 }
