@@ -62,7 +62,7 @@
             transform: translateY(-3px);
         }
 
-        .admin-section2 {
+         .admin-section2 {
             background-color: var(--card-bg2);
             border-radius: 12px;
             padding: 25px;
@@ -137,33 +137,21 @@
 </head>
 
 <body>
-    <div id="background" style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:0;"></div>
     <h1>Admin Panel</h1>
-    <div class="admin-section" style = "z-index:1;">
+    <div class="admin-section">
         <h2>Server Information</h2>
         <p>Active Connections: {{ activeConnections }}</p>
         <p>Total Requests: {{ totalRequests }}</p>
         <p>Start Time: {{ startTime }}</p>
     </div>
     <div style = "display: flex; justify-content: center; width:100%; text-align: center;">
-        <div class="admin-section" style = "width:10%;" onclick="console.log('This is a placeholder action')">
-            返回主页
+        <div class="admin-section" style = "width:10%;" onclick="window.location.href='/'">
+            <h>返回主页</h>
         </div>
-        <div class="admin-section2" style = "margin-left: 2%; width:10%;" onclick="shutdown()">
-            关闭服务器
+        <div class="admin-section2" style = "margin-left: 2%; width:10%;" onclick="window.location.href='/admin/shutdown'">
+            <h>关闭服务器</h>
         </div>
     </div>
 </body>
-
-<script>
-    function shutdown() {
-        fetch('/admin/shutdown')
-            .then(response => {
-                if (response.ok) {
-                    window.location.herf = '/shutdown_success';
-                }
-            })
-    }
-</script>
 
 </html>

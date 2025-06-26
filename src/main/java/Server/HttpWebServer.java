@@ -19,50 +19,69 @@ public class HttpWebServer {
     private static final int DEFAULT_PORT = 8080;
     private static final int HTTPS_PORT = 8443;
     private static final int THREAD_POOL_SIZE = 50;
-    private static final String STATIC_DIR = "static";
     private static final String LOG_FILE = "access.log";
     static final String RECOURSES_DIR = "static/recourses";
+    private static final String SESSIONS_FILE = "sessions.dat";
     
     private ServerSocket serverSocket;
     private SSLServerSocket sslServerSocket;
     private final ExecutorService threadPool;
     private volatile boolean running = false;
-    
-    // Server statistics
+
     private final AtomicInteger activeConnections = new AtomicInteger(0);
     private final AtomicLong totalRequests = new AtomicLong(0);
     private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
 
-    // Session management
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, User> users = new ConcurrentHashMap<>();
-    
-    // Request logger
+
     private final RequestLogger logger;
     
     public HttpWebServer() {
         this.threadPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
         this.logger = new RequestLogger(LOG_FILE);
         
-        // Initialize some demo users
         users.put("admin", new User("admin", "password", "Administrator"));
         users.put("user", new User("user", "123456", "Regular User"));
-        
-        // Create static directory if it doesn't exist
-        new File(STATIC_DIR).mkdirs();
-//        createSampleStaticFiles();
     }
-    
+
+    private void loadSessions() {
+        File file = new File(SESSIONS_FILE);
+        if (!file.exists()) {
+            System.out.println("No session file found, start with empty sessions.");
+            return;
+        }
+
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+            Object obj = ois.readObject();
+            if (obj instanceof Map) {
+                Map<String, Session> loadedSessions = (Map<String, Session>) obj;
+                sessions.putAll(loadedSessions);
+                System.out.println("Loaded " + loadedSessions.size() + " sessions from file.");
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to load sessions: " + e.getMessage());
+        }
+    }
+
+    private void saveSessions() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(SESSIONS_FILE))) {
+            oos.writeObject(sessions);
+            System.out.println("Saved " + sessions.size() + " sessions to file.");
+        } catch (IOException e) {
+            System.err.println("Failed to save sessions: " + e.getMessage());
+        }
+    }
+
     public void start(int port, boolean enableHttps) throws IOException {
-        // Start HTTP server
+        loadSessions();
         //修改为IPV6的绑定方式
         serverSocket = new ServerSocket();
         serverSocket.bind(new InetSocketAddress("::0",port));
         running = true;
         
         System.out.println("HTTP Server started on port " + port);
-        
-        // Start HTTPS server if enabled
+
         if (enableHttps) {
             try {
                 setupSSL();
@@ -134,6 +153,7 @@ public class HttpWebServer {
     
     public void stop() {
         running = false;
+        saveSessions();
         try {
             if (serverSocket != null) serverSocket.close();
             if (sslServerSocket != null) sslServerSocket.close();
@@ -145,7 +165,6 @@ public class HttpWebServer {
         }
     }
 
-    // Getters for request handler
     public Map<String, Session> getSessions() { return sessions; }
     public Map<String, User> getUsers() { return users; }
     public RequestLogger getLogger() { return logger; }
@@ -155,10 +174,9 @@ public class HttpWebServer {
     
     public static void main(String[] args) {
         HttpWebServer server = new HttpWebServer();
-        
-        // Add shutdown hook
+
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
-        
+
         try {
             int port = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_PORT;
             boolean enableHttps = args.length > 1 && Boolean.parseBoolean(args[1]);

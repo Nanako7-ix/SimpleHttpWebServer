@@ -1,8 +1,9 @@
 package util;
 
+import java.io.Serializable;
 import java.util.Date;
 
-public class Session {
+public class Session implements Serializable {
     private final String sessionId;
     private final String username;
     private final Date createdAt;
