@@ -9,7 +9,7 @@
         // 500 Internal Server Error Cannot invoke "util.Session.getUsername()" because the return value of "java.util.Map.get(Object)" is null
 5. 支持线程池 [100%]
 6. 日志记录 [100%?] // 我没看
-7. 支持HTTPS [0%]
+7. 支持HTTPS [100%]//已完成
     * 100% SSL证书配置
 
 功能需求：

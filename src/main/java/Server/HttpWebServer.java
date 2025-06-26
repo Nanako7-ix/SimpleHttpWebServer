@@ -5,6 +5,8 @@ import util.User;
 
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -80,16 +82,20 @@ public class HttpWebServer {
     }
     
     private void setupSSL() throws Exception {
-        // Create a simple keystore for demo purposes
-        // In production, use proper certificates
-        KeyStore keyStore = KeyStore.getInstance("JKS");
-        keyStore.load(null, null);
-        
+        // 加载现有的keystore文件
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        try (InputStream keyStoreStream = Files.newInputStream(Paths.get("keystore.p12"))) {
+            keyStore.load(keyStoreStream, "123456".toCharArray());
+        }
+    
+        // 配置SSL上下文
         SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(null, null, new SecureRandom());
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, "123456".toCharArray());
         
-        SSLServerSocketFactory factory = sslContext.getServerSocketFactory();
-        sslServerSocket = (SSLServerSocket) factory.createServerSocket(HTTPS_PORT);
+        sslContext.init(kmf.getKeyManagers(), null, new SecureRandom());
+        sslServerSocket = (SSLServerSocket) sslContext.getServerSocketFactory()
+                            .createServerSocket(HTTPS_PORT);
     }
     
     private void handleConnections() throws IOException {
