@@ -5,11 +5,9 @@ public class ServerRunner {
         System.out.println("=== Multi-threaded HTTP Web Server ===");
         System.out.println("Starting server...");
 
-        // Default configuration
         int port = 8080;
         boolean enableHttps = true;
 
-        // Parse command line arguments
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
@@ -30,7 +28,6 @@ public class ServerRunner {
         System.out.println("- Access Log: access.log");
         System.out.println();
 
-        // Start the server
         HttpWebServer.main(new String[]{String.valueOf(port), String.valueOf(enableHttps)});
     }
 }
