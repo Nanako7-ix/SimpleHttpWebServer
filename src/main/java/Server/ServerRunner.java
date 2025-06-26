@@ -1,5 +1,7 @@
 package Server;
 
+import java.io.IOException;
+
 public class ServerRunner {
     public static void main(String[] args) {
         System.out.println("=== Multi-threaded HTTP Web Server ===");
@@ -7,18 +9,6 @@ public class ServerRunner {
 
         int port = 8080;
         boolean enableHttps = true;
-
-        if (args.length > 0) {
-            try {
-                port = Integer.parseInt(args[0]);
-            } catch (NumberFormatException e) {
-                System.err.println("Invalid port number. Using default: " + port);
-            }
-        }
-
-        if (args.length > 1) {
-            enableHttps = Boolean.parseBoolean(args[1]);
-        }
 
         System.out.println("Configuration:");
         System.out.println("- HTTP Port: " + port);
@@ -28,6 +18,13 @@ public class ServerRunner {
         System.out.println("- Access Log: access.log");
         System.out.println();
 
-        HttpWebServer.main(new String[]{String.valueOf(port), String.valueOf(enableHttps)});
+        HttpWebServer server = new HttpWebServer();
+        Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
+
+        try {
+            server.start(port, enableHttps);
+        } catch (IOException e) {
+            System.err.println("Failed to start server: " + e.getMessage());
+        }
     }
 }
