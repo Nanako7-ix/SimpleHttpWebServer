@@ -14,6 +14,8 @@
             --button-hover: #2980b9;
             --card-bg: rgba(255, 255, 255, 0.1);
             --card-hover: rgba(255, 255, 255, 0.2);
+            --card-bg2: rgba(255, 255, 255, 0.1);
+            --card-hover2: rgba(242, 23, 23, 0.8);
         }
 
         body {
@@ -60,6 +62,20 @@
             transform: translateY(-3px);
         }
 
+        .admin-section2 {
+            background-color: var(--card-bg2);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+
+        .admin-section2:hover {
+            background-color: var(--card-hover2);
+            transform: translateY(-3px);
+        }
+
         h2 {
             font-size: 1.8rem;
             margin-bottom: 20px;
@@ -98,33 +114,6 @@
             background-color: rgba(255, 255, 255, 0.05);
         }
 
-        button {
-            padding: 8px 15px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: background-color 0.3s ease;
-        }
-
-        .edit-btn {
-            background-color: #27ae60;
-            color: white;
-            margin-right: 10px;
-        }
-
-        .edit-btn:hover {
-            background-color: #219653;
-        }
-
-        .delete-btn {
-            background-color: #e74c3c;
-            color: white;
-        }
-
-        .delete-btn:hover {
-            background-color: #c0392b;
-        }
 
         @media (max-width: 768px) {
             h1 {
@@ -143,11 +132,6 @@
             td {
                 padding: 10px;
             }
-
-            button {
-                padding: 6px 12px;
-                font-size: 0.9rem;
-            }
         }
     </style>
 </head>
@@ -162,11 +146,11 @@
         <p>Start Time: {{ startTime }}</p>
     </div>
     <div style = "display: flex; justify-content: center; width:100%; text-align: center;">
-        <div class="admin-section" style = "width:10%;" onclick="window.location.href='/'">
-            <h>返回主页</h>
+        <div class="admin-section" style = "width:10%;" onclick="console.log('This is a placeholder action')">
+            返回主页
         </div>
-        <div class="admin-section2" style = "margin-left: 2%; width:10%;" onclick="window.location.href='/admin/shutdown'">
-            <h>关闭服务器</h>
+        <div class="admin-section2" style = "margin-left: 2%; width:10%;" onclick="shutdown()">
+            关闭服务器
         </div>
     </div>
 </body>
