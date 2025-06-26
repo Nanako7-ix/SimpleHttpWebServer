@@ -89,7 +89,14 @@ public class RequestHandler implements Runnable {
 
         return new HttpRequest(method, path, version, headers, body);
     }
-
+    private HttpResponse handleConnectionsCount(HttpRequest request) {
+        // 只允许本地访问
+        if (!clientSocket.getInetAddress().isLoopbackAddress()) {
+            return new HttpResponse(403, "Forbidden", "text/plain", "Access denied".getBytes());
+        }
+        int count = server.getActiveConnections().get();
+        return new HttpResponse(200, "OK", "text/plain", String.valueOf(count).getBytes());
+    }
     /**
      * 处理 HTTP 请求, 根据请求的路径调用不同的处理方法
      * @param request 请求报文
@@ -106,6 +113,7 @@ public class RequestHandler implements Runnable {
                 case "/repo" -> handleDownload(request);
                 case "/admin" -> handleAdmin(request);
                 case "/admin/shutdown" -> handleShutdown(request);
+                case "/admin/connections" -> handleConnectionsCount(request);
                 default -> handleStaticFile(request);
             };
 
