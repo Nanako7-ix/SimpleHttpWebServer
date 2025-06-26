@@ -357,9 +357,8 @@ public class RequestHandler implements Runnable {
 
         File file = new File("static" + path);
         if (!file.exists() || file.isDirectory()) {
-            // TODO：换一下这个默认界面
             return new HttpResponse(404, "Not Found", "text/html",
-                    "<h1>404 Not Found</h1><p>The requested resource was not found.</p>");
+                    errorHTMLPage(404, "Not Found", "The requested resource was not found."));
         }
 
         try {
@@ -470,5 +469,20 @@ public class RequestHandler implements Runnable {
     private String getMimeType(String fileName) {
         MimeType mimeType = MimeType.fromFilename(fileName);
         return mimeType.getMimeType();
+    }
+
+    /**
+     * 生成报错网页报文
+     */
+    private String errorHTMLPage (int statusCode, String statusText, String Message) {
+        return "<!DOCTYPE html>" +
+        "<html><head><title>Error</title>" +
+        "<link rel='stylesheet' href='/error_style.css'>" +
+        "</head><body class='error-page'>" +
+        "<div class='error-container'>" +
+        "<h1>"+ statusCode + ' ' + statusText + "</h1>" +
+        "<div class='error-details'>" + Message + "</div>" +
+        "<a href='/' class='back-link'>Back</a>" +
+        "</div></body></html>";
     }
 }

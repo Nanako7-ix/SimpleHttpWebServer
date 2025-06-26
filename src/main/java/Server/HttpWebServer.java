@@ -55,6 +55,7 @@ public class HttpWebServer {
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
             Object obj = ois.readObject();
             if (obj instanceof Map) {
+                @SuppressWarnings("unchecked")
                 Map<String, Session> loadedSessions = (Map<String, Session>) obj;
                 sessions.putAll(loadedSessions);
                 System.out.println("Loaded " + loadedSessions.size() + " sessions from file.");
