@@ -89,7 +89,14 @@ public class RequestHandler implements Runnable {
 
         return new HttpRequest(method, path, version, headers, body);
     }
-
+    private HttpResponse handleConnectionsCount(HttpRequest request) {
+        // 只允许本地访问
+        if (!clientSocket.getInetAddress().isLoopbackAddress()) {
+            return new HttpResponse(403, "Forbidden", "text/plain", "Access denied".getBytes());
+        }
+        int count = server.getActiveConnections().get();
+        return new HttpResponse(200, "OK", "text/plain", String.valueOf(count).getBytes());
+    }
     /**
      * 处理 HTTP 请求, 根据请求的路径调用不同的处理方法
      * @param request 请求报文
@@ -106,14 +113,13 @@ public class RequestHandler implements Runnable {
                 case "/repo" -> handleDownload(request);
                 case "/admin" -> handleAdmin(request);
                 case "/admin/shutdown" -> handleShutdown(request);
-                case "/status" -> handleStatus(request);
+                case "/admin/connections" -> handleConnectionsCount(request);
                 default -> handleStaticFile(request);
             };
 
         } catch (Exception e) {
-            // TODO: 换一下这个默认界面
-            return new HttpResponse(500, "Internal Server Error",
-                    "text/html", "<h1>500 Internal Server Error</h1><p>" + e.getMessage() + "</p>");
+            return new HttpResponse(500, "Internal Server Error", "text/html",
+                    errorHTMLPage(500, "Internal Server Error", "Internal Server Error: " + e.getMessage()));
         }
     }
 
@@ -148,20 +154,18 @@ public class RequestHandler implements Runnable {
                         httpResponse.addCookie("sessionId", sessionId);
                         return httpResponse;
                     } catch (IOException e) {
-                        // 处理文件读取错误
                         return new HttpResponse(500, "Internal Server Error", "text/html",
-                                "<h1>500 Internal Server Error</h1><p>Error reading login success page: " + e.getMessage() + "</p>");
+                                errorHTMLPage(500, "Internal Server Error", "Error reading login success page: " + e.getMessage()));
                     }
                 } else {
-                    // TODO：换一下这个默认界面
                     return new HttpResponse(401, "Unauthorized", "text/html",
-                            "<h1>Login Failed</h1><p>Invalid credentials</p><a href='/login'>Try again</a>");
+                            errorHTMLPage(401, "Unauthorized", "Invalid credentials, please try again."));
                 }
             }
         }
 
-        // TODO：换一下这个默认界面
-        return new HttpResponse(400, "Bad Request", "text/html", "<h1>400 Bad Request</h1>");
+        return new HttpResponse(400, "Bad Request", "text/html",
+                errorHTMLPage(400, "Bad Request", "Bad Request"));
     }
 
     /**
@@ -185,9 +189,8 @@ public class RequestHandler implements Runnable {
             httpResponse.eraseCookie("sessionId");
             return httpResponse;
         } catch (IOException e) {
-            // 处理文件读取错误
             return new HttpResponse(500, "Internal Server Error", "text/html",
-                    "<h1>500 Internal Server Error</h1><p>Error reading login success page: " + e.getMessage() + "</p>");
+                    errorHTMLPage(500, "Internal Server Error", "Error reading login success page" + e.getMessage()));
         }
     }
 
@@ -200,7 +203,7 @@ public class RequestHandler implements Runnable {
         File htmlFile = new File("static/store.html");
         if (!htmlFile.exists()) {
             return new HttpResponse(404, "Not Found", "text/html",
-                    "<h1>404 Not Found</h1><p>store.html not found.</p>");
+                    errorHTMLPage(404, "Not Found", "Page Not Found"));
         }
 
         try {
@@ -231,7 +234,7 @@ public class RequestHandler implements Runnable {
             return new HttpResponse(200, "OK", "text/html", content.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             return new HttpResponse(500, "Internal Server Error", "text/html",
-                    ("<h1>500 Internal Server Error</h1><p>" + e.getMessage() + "</p>").getBytes());
+                    errorHTMLPage(500, "Internal Server Error", "Internal Server Error" + e.getMessage()));
         }
     }
 
@@ -256,7 +259,7 @@ public class RequestHandler implements Runnable {
         File file = new File(HttpWebServer.RECOURSES_DIR, filename); // 资源目录 + 文件名
         if (!file.exists() || file.isDirectory()) {
             return new HttpResponse(404, "Not Found", "text/html",
-                    "<h1>404 Not Found</h1><p>Requested file not found.</p>");
+                    errorHTMLPage(404, "Not Found", "Page Not Found"));
         }
 
         try {
@@ -268,7 +271,7 @@ public class RequestHandler implements Runnable {
             return response;
         } catch (IOException e) {
             return new HttpResponse(500, "Internal Server Error", "text/html",
-                    ("<h1>500 Internal Server Error</h1><p>" + e.getMessage() + "</p>").getBytes());
+                    errorHTMLPage(500, "Internal Server Error", "Internal Server Error" + e.getMessage()));
         }
     }
 
@@ -276,14 +279,12 @@ public class RequestHandler implements Runnable {
      * 处理访问管理页面请求
      */
     private HttpResponse handleAdmin(HttpRequest request) {
-//        System.out.println(123);
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
 
         if (session == null || !session.getUsername().equals("admin")) {
-            // TODO：换一下这个默认界面
             return new HttpResponse(403, "Forbidden", "text/html",
-                    "<h1>403 Forbidden</h1><p>Admin access required</p><a href='/login'>Login</a>");
+                    errorHTMLPage(403, "Forbidden", "Admin access required"));
         }
 
         try {
@@ -291,7 +292,7 @@ public class RequestHandler implements Runnable {
             File adminFile = new File("static/admin.html");
             if (adminFile.exists() && adminFile.isFile()) {
                 String content = new String(Files.readAllBytes(adminFile.toPath()));
-                
+
                 // 获取服务器数据
                 long activeConnections = server.getActiveConnections().get();
                 long totalRequests = server.getTotalRequests().get();
@@ -306,14 +307,12 @@ public class RequestHandler implements Runnable {
 
                 return new HttpResponse(200, "OK", "text/html", content.getBytes());
             } else {
-                // 文件不存在，返回 404
                 return new HttpResponse(404, "Not Found", "text/html",
-                        "<h1>404 Not Found</h1><p>The admin page was not found.</p>");
+                        errorHTMLPage(404, "Not Found", "Page Not Found"));
             }
         } catch (IOException e) {
-            // 读取文件出错，返回 500
             return new HttpResponse(500, "Internal Server Error", "text/html",
-                    "<h1>500 Internal Server Error</h1><p>Error reading admin page: " + e.getMessage() + "</p>");
+                    errorHTMLPage(500, "Internal Server Error", "Error reading admin page: " + e.getMessage()));
         }
     }
 
@@ -325,9 +324,8 @@ public class RequestHandler implements Runnable {
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
 
         if (session == null || !session.getUsername().equals("admin")) {
-            // TODO: 换一下这个默认界面
             return new HttpResponse(403, "Forbidden", "text/html",
-                    "<h1>403 Forbidden</h1><p>Admin access required</p>");
+                    errorHTMLPage(403, "Forbidden", "你没有权限."));
         }
 
         new Thread(() -> {
@@ -371,17 +369,10 @@ public class RequestHandler implements Runnable {
             path = "/index.html";
         }
 
-//        if (path.equals("/index.html") && getCookieValue(request, "sessionId") == null) {
-//            // 如果是 index.html 且没有 SessionId, 重定向到登录页面
-//            HttpResponse response = new HttpResponse(302, "Found", "text/html", "");
-//            response.addHeader("Location", "/login");
-//            return response;
-//        }
-
         File file = new File("static" + path);
         if (!file.exists() || file.isDirectory()) {
             return new HttpResponse(404, "Not Found", "text/html",
-                    errorHTMLPage(404, "Not Found", "The requested resource was not found."));
+                    errorHTMLPage(404, "Not Found", "Page Not Found"));
         }
 
         try {
@@ -403,9 +394,8 @@ public class RequestHandler implements Runnable {
 
             return new HttpResponse(200, "OK", mimeType, content.getBytes());
         } catch (IOException e) {
-            // TODO: 换一下这个默认界面
             return new HttpResponse(500, "Internal Server Error", "text/html",
-                    "<h1>500 Internal Server Error</h1><p>Error reading file: " + e.getMessage() + "</p>");
+                    errorHTMLPage(500, "Internal Server Error", "Error reading file: " + e.getMessage()));
         }
     }
     
