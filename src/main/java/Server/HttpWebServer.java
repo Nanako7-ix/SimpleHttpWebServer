@@ -16,13 +16,11 @@ import javax.net.ssl.*;
 import java.security.KeyStore;
 
 public class HttpWebServer {
-    private static final int DEFAULT_PORT = 8080;
-    private static final int HTTPS_PORT = 8443;
     private static final int THREAD_POOL_SIZE = 50;
     private static final String LOG_FILE = "access.log";
     static final String RECOURSES_DIR = "static/recourses";
     private static final String SESSIONS_FILE = "sessions.dat";
-    
+
     private ServerSocket serverSocket;
     private SSLServerSocket sslServerSocket;
     private final ExecutorService threadPool;
@@ -40,7 +38,7 @@ public class HttpWebServer {
     public HttpWebServer() {
         this.threadPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
         this.logger = new RequestLogger(LOG_FILE);
-        
+
         users.put("admin", new User("admin", "password", "Administrator"));
         users.put("user", new User("user", "123456", "Regular User"));
     }
@@ -74,35 +72,32 @@ public class HttpWebServer {
         }
     }
 
-    public void start(int port, boolean enableHttps) throws IOException {
+    public void start(int http_port, int https_port) throws IOException {
         loadSessions();
 
         serverSocket = new ServerSocket();
-        serverSocket.bind(new InetSocketAddress("::0",port));
+        serverSocket.bind(new InetSocketAddress("::0", http_port));
         running = true;
         
-        System.out.println("HTTP Server started on port " + port);
+        System.out.println("HTTP Server started on port " + http_port);
 
-        if (enableHttps) {
-            try {
-                setupSSL();
-                new Thread(() -> {
-                    try {
-                        handleHttpsConnections();
-                    } catch (IOException e) {
-                        System.err.println("HTTPS server error: " + e.getMessage());
-                    }
-                }).start();
-                System.out.println("HTTPS Server started on port " + HTTPS_PORT);
-            } catch (Exception e) {
-                System.err.println("Failed to start HTTPS server: " + e.getMessage());
-            }
+        try {
+            setupSSL(https_port);
+            new Thread(() -> {
+                try {
+                    handleHttpsConnections();
+                } catch (IOException e) {
+                    System.err.println("HTTPS server error: " + e.getMessage());
+                }
+            }).start();
+        } catch (Exception e) {
+            System.err.println("Failed to start HTTPS server: " + e.getMessage());
         }
 
         handleConnections();
     }
     
-    private void setupSSL() throws Exception {
+    private void setupSSL(int https_port) throws Exception {
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (InputStream keyStoreStream = Files.newInputStream(Paths.get("keystore.p12"))) {
             keyStore.load(keyStoreStream, "123456".toCharArray());
@@ -114,7 +109,7 @@ public class HttpWebServer {
         
         sslContext.init(kmf.getKeyManagers(), null, new SecureRandom());
         sslServerSocket = (SSLServerSocket) sslContext.getServerSocketFactory()
-                            .createServerSocket(HTTPS_PORT);
+                            .createServerSocket(https_port);
     }
     
     private void handleConnections() {
