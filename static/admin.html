@@ -137,6 +137,10 @@
 </head>
 
 <body>
+<<<<<<< HEAD
+=======
+    <div id="background" style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:0;"></div>
+>>>>>>> 7df2ff8ace7a88a58d8c19c64a43ce503aa20076
     <h1>Admin Panel</h1>
     <div class="admin-section">
         <h2>Server Information</h2>
@@ -144,6 +148,7 @@
         <p>Total Requests: {{ totalRequests }}</p>
         <p>Start Time: {{ startTime }}</p>
     </div>
+<<<<<<< HEAD
     <div style = "display: flex; justify-content: center; width:100%; text-align: center;">
         <div class="admin-section" style = "width:10%;" onclick="window.location.href='/'">
             <h>返回主页</h>
@@ -151,7 +156,59 @@
         <div class="admin-section2" style = "margin-left: 2%; width:10%;" onclick="window.location.href='/admin/shutdown'">
             <h>关闭服务器</h>
         </div>
+=======
+    <div class="shot-down" style="width: 0px; height: 50px; position: relative; left: 50%; transform: translateX(-50%); z-index:1;">
+        <button onclick="shutdown()">关闭服务器</button>
+    </div>
+    <div class="admin-section" style = "z-index:1;">
+        <h2>User Management</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>admin</td>
+                    <td>2025-06-25 10:00:00</td>
+                    <td>
+                        <button class="edit-btn">Edit</button>
+                        <button class="delete-btn">Delete</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>user</td>
+                    <td>2025-06-25 11:30:00</td>
+                    <td>
+                        <button class="edit-btn">Edit</button>
+                        <button class="delete-btn">Delete</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+>>>>>>> 7df2ff8ace7a88a58d8c19c64a43ce503aa20076
     </div>
 </body>
+
+<script>
+    function shutdown() {
+        fetch('/admin/shutdown')
+            // .then(response => {
+            //     if (response.ok) {
+            //         alert('Shutdown request sent.');
+            //     } else {
+            //         alert('Failed to shut down the server.');
+            //     }
+            // })
+            // .catch(error => {
+            //     console.error('Error:', error);
+            //     alert('Network error.');
+            // });
+        console.log("uiasgdfblk")
+    }
+</script>
 
 </html>
