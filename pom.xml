@@ -21,5 +21,11 @@
             <artifactId>bcpkix-jdk15on</artifactId>
             <version>1.70</version>
         </dependency>
+        <!--非阻塞IO的相关依赖-->
+        <dependency>
+            <groupId>org.apache.tomcat</groupId>
+            <artifactId>tomcat-coyote</artifactId>
+            <version>9.0.54</version>
+        </dependency>
     </dependencies>
 </project>
