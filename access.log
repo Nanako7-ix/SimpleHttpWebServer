@@ -1561,3 +1561,17 @@
 127.0.0.1 - - [26/Jun/2025:16:58:28 +0800] "POST /login HTTP/1.1" 200 2514
 127.0.0.1 - - [26/Jun/2025:16:58:30 +0800] "GET /admin HTTP/1.1" 200 4305
 127.0.0.1 - - [26/Jun/2025:16:58:31 +0800] "GET /admin/shutdown HTTP/1.1" 200 76
+127.0.0.1 - - [26/Jun/2025:17:08:14 +0800] "GET /admin HTTP/1.1" 403 76
+127.0.0.1 - - [26/Jun/2025:17:08:16 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 66
+127.0.0.1 - - [26/Jun/2025:17:08:19 +0800] "GET /admin HTTP/1.1" 403 76
+127.0.0.1 - - [26/Jun/2025:17:08:19 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 66
+127.0.0.1 - - [26/Jun/2025:17:08:22 +0800] "GET / HTTP/1.1" 200 3757
+127.0.0.1 - - [26/Jun/2025:17:08:22 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 66
+127.0.0.1 - - [26/Jun/2025:17:08:23 +0800] "GET /login HTTP/1.1" 200 4334
+127.0.0.1 - - [26/Jun/2025:17:08:23 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 66
+127.0.0.1 - - [26/Jun/2025:17:08:29 +0800] "POST /login HTTP/1.1" 200 2514
+127.0.0.1 - - [26/Jun/2025:17:08:29 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 66
+127.0.0.1 - - [26/Jun/2025:17:08:40 +0800] "GET /admin HTTP/1.1" 200 4953
+127.0.0.1 - - [26/Jun/2025:17:08:40 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 66
+127.0.0.1 - - [26/Jun/2025:17:08:44 +0800] "GET /admin/shutdown HTTP/1.1" 200 76
+127.0.0.1 - - [26/Jun/2025:17:08:45 +0800] "GET /admin/shutdown HTTP/1.1" 200 76
