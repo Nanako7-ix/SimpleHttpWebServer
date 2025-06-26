@@ -37,3 +37,7 @@
 127.0.0.1 - - [26/Jun/2025:19:51:30 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 282
 127.0.0.1 - - [26/Jun/2025:19:51:32 +0800] "GET /admin/shutdown HTTP/1.1" 200 76
 127.0.0.1 - - [26/Jun/2025:19:51:32 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 282
+127.0.0.1 - - [26/Jun/2025:19:52:42 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 282
+127.0.0.1 - - [26/Jun/2025:19:56:29 +0800] "GET /ioahsdf HTTP/1.1" 404 282
+127.0.0.1 - - [26/Jun/2025:19:56:29 +0800] "GET /error_style.css HTTP/1.1" 200 2259
+127.0.0.1 - - [26/Jun/2025:19:56:29 +0800] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 282
