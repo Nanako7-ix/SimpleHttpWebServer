@@ -2,8 +2,12 @@ package Server;
 
 import java.io.*;
 import java.net.*;
-import java.util.concurrent.*;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import util.HttpRequest;
+import util.HttpResponse;
+
 public class ReverseProxyServer {
     private static final int THREAD_POOL_SIZE = 50;
     private final int proxyPort;
@@ -32,7 +36,8 @@ public class ReverseProxyServer {
         System.out.println("Reverse Proxy started on port " + proxyPort);
         System.out.println("Backend servers:");
         for (BackendServer server : backendServers) {
-            System.out.println(" - " + server.host() + ":" + server.port());
+            System.out.println(" - " + server.host() + ":" + server.port() + 
+                              " (current connections: " + server.activeConnections() + ")");
         }
         
         handleConnections();
@@ -41,31 +46,55 @@ public class ReverseProxyServer {
     private void updateServerStatus() {
         for (BackendServer server : backendServers) {
             try (Socket statusSocket = new Socket(server.host(), server.port())) {
-                PrintWriter out = new PrintWriter(statusSocket.getOutputStream(), true);
-                BufferedReader in = new BufferedReader(new InputStreamReader(statusSocket.getInputStream()));
+                statusSocket.setSoTimeout(1000); // 设置超时时间
                 
                 // 发送状态查询请求
-                out.println("GET /status HTTP/1.1");
+                PrintWriter out = new PrintWriter(statusSocket.getOutputStream(), true);
+                out.println("GET /admin/connections HTTP/1.1");
                 out.println("Host: " + server.host());
                 out.println("Connection: close");
                 out.println();
+                out.flush();
                 
                 // 读取响应
+                BufferedReader in = new BufferedReader(new InputStreamReader(statusSocket.getInputStream()));
                 String line;
-                while ((line = in.readLine()) != null) {
-                    if (line.startsWith("Content-Length: ")) {
-                        int contentLength = Integer.parseInt(line.substring(16).trim());
-                        char[] content = new char[contentLength];
-                        in.read(content, 0, contentLength);
-                        int connections = Integer.parseInt(new String(content));
-                        server.setActiveConnections(connections);
-                        break;
+                int contentLength = -1;
+                StringBuilder responseBuilder = new StringBuilder();
+                
+                // 读取响应头
+                while ((line = in.readLine()) != null && !line.isEmpty()) {
+                    responseBuilder.append(line).append("\n");
+                    
+                    // 检查Content-Length头
+                    if (line.toLowerCase().startsWith("content-length:")) {
+                        contentLength = Integer.parseInt(line.substring(15).trim());
                     }
                 }
-            } catch (IOException | NumberFormatException e) {
-                // 标记服务器为不可用
+                
+                // 读取响应体（如果有）
+                String content = "";
+                if (contentLength > 0) {
+                    char[] contentChars = new char[contentLength];
+                    in.read(contentChars, 0, contentLength);
+                    content = new String(contentChars);
+                }
+                
+                // 检查响应状态码
+                if (responseBuilder.toString().startsWith("HTTP/1.1 200 OK")) {
+                    int connections = Integer.parseInt(content.trim());
+                    server.setActiveConnections(connections);
+                    System.out.println("[" + new Date() + "] Server " + server.host() + 
+                                    ":" + server.port() + " connections: " + connections);
+                } else {
+                    server.setActiveConnections(Integer.MAX_VALUE);
+                    System.err.println("[" + new Date() + "] Server " + server.host() + 
+                                    ":" + server.port() + " returned non-200 status");
+                }
+            } catch (IOException | NumberFormatException | StringIndexOutOfBoundsException e) {
                 server.setActiveConnections(Integer.MAX_VALUE);
-                System.err.println("Error checking status of " + server.host() + ":" + server.port() + ": " + e.getMessage());
+                System.err.println("[" + new Date() + "] Error checking status of " + 
+                                server.host() + ":" + server.port() + ": " + e.getMessage());
             }
         }
     }
@@ -90,58 +119,74 @@ public class ReverseProxyServer {
     }
     
     private void handleClientRequest(Socket clientSocket) {
-        BackendServer bestServer = selectBestServer();
-        
-        try (Socket targetSocket = new Socket(bestServer.host(), bestServer.port())) {
-            // 获取输入输出流
-            InputStream clientIn = clientSocket.getInputStream();
-            OutputStream clientOut = clientSocket.getOutputStream();
-            InputStream targetIn = targetSocket.getInputStream();
-            OutputStream targetOut = targetSocket.getOutputStream();
-            
-            // 启动两个线程进行双向数据转发
-            ExecutorService pipePool = Executors.newFixedThreadPool(2);
-            
-            // 客户端 -> 代理 -> 目标服务器
-            pipePool.submit(() -> pipeData(clientIn, targetOut, clientSocket, targetSocket));
-            
-            // 目标服务器 -> 代理 -> 客户端
-            pipePool.submit(() -> pipeData(targetIn, clientOut, targetSocket, clientSocket));
-            
-            // 等待转发任务完成
-            pipePool.shutdown();
-            try {
-                pipePool.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        } catch (IOException e) {
-            System.err.println("Error connecting to target server " + bestServer.host() + 
-                              ":" + bestServer.port() + ": " + e.getMessage());
-        } finally {
-            closeQuietly(clientSocket);
-        }
-    }
-    
-    private void pipeData(InputStream in, OutputStream out, Socket srcSocket, Socket destSocket) {
-        byte[] buffer = new byte[8192];
-        int bytesRead;
         try {
-            while ((bytesRead = in.read(buffer)) != -1) {
-                if (bytesRead > 0) {
-                    out.write(buffer, 0, bytesRead);
-                    out.flush();
+            // 读取客户端请求
+            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            StringBuilder requestBuilder = new StringBuilder();
+            String line;
+            while (!(line = in.readLine()).isEmpty()) {
+                requestBuilder.append(line).append("\r\n");
+            }
+            
+            // 解析请求
+            String requestStr = requestBuilder.toString();
+            String[] parts = requestStr.split("\r\n", 2);
+            String[] requestLine = parts[0].split(" ");
+            String method = requestLine[0];
+            String path = requestLine[1];
+            String version = requestLine[2];
+            
+            Map<String, String> headers = new HashMap<>();
+            if (parts.length > 1) {
+                for (String header : parts[1].split("\r\n")) {
+                    int colonIndex = header.indexOf(':');
+                    if (colonIndex > 0) {
+                        String key = header.substring(0, colonIndex).trim().toLowerCase();
+                        String value = header.substring(colonIndex + 1).trim();
+                        headers.put(key, value);
+                    }
                 }
             }
-        } catch (SocketException e) {
-            if (!e.getMessage().contains("reset") && !e.getMessage().contains("closed")) {
-                System.err.println("Socket error in pipe: " + e.getMessage());
+            
+            // 选择最佳服务器
+            BackendServer bestServer = selectBestServer();
+            // System.out.println("[" + new Date() + "] Selected server: " + 
+            //                   bestServer.host() + ":" + bestServer.port() + 
+            //                   " (connections: " + bestServer.activeConnections() + ")");
+            
+            // 转发请求到后端服务器
+            try (Socket targetSocket = new Socket(bestServer.host(), bestServer.port())) {
+                PrintWriter targetOut = new PrintWriter(targetSocket.getOutputStream(), true);
+                targetOut.println(requestStr);
+                targetOut.flush();
+                
+                // 获取后端响应
+                BufferedReader targetIn = new BufferedReader(new InputStreamReader(targetSocket.getInputStream()));
+                StringBuilder responseBuilder = new StringBuilder();
+                while ((line = targetIn.readLine()) != null) {
+                    responseBuilder.append(line).append("\r\n");
+                }
+                
+                // 返回响应给客户端
+                PrintWriter clientOut = new PrintWriter(clientSocket.getOutputStream(), true);
+                clientOut.println(responseBuilder.toString());
+                clientOut.flush();
+            } catch (IOException e) {
+                // 返回错误响应
+                PrintWriter clientOut = new PrintWriter(clientSocket.getOutputStream(), true);
+                clientOut.println("HTTP/1.1 502 Bad Gateway\r\n");
+                clientOut.println("Content-Type: text/plain\r\n");
+                clientOut.println("\r\n");
+                clientOut.println("502 Bad Gateway: Unable to connect to backend server");
+                clientOut.flush();
+                
+                System.err.println("Error connecting to target server " + bestServer.host() + 
+                                  ":" + bestServer.port() + ": " + e.getMessage());
             }
         } catch (IOException e) {
-            System.err.println("I/O error in pipe: " + e.getMessage());
+            System.err.println("Error handling client request: " + e.getMessage());
         } finally {
-            closeQuietly(srcSocket);
-            closeQuietly(destSocket);
+            closeQuietly(clientSocket);
         }
     }
     

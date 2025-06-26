@@ -351,14 +351,6 @@ public class RequestHandler implements Runnable {
     }
 
     /**
-     * 获取活跃连接数
-     */
-    private HttpResponse handleStatus(HttpRequest request) {
-        String value = String.valueOf(server.getActiveConnections());
-        return new HttpResponse(200, "OK", "text/plain", value.getBytes());
-    }
-
-    /**
      * 根据请求的路径处理静态文件
      * @param request 请求报文
      * @return 响应报文
