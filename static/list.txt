@@ -4,10 +4,6 @@
 2. 提供静态文件服务 [100%]
 3. 处理动态请求（如/login，/search） [100%]
 4. 支持Cookie和会话 [100%]
-    * 10% 登录的Cookie有一个小bug，登录的情况下关闭Server，
-      再次打开Server，点logout会报错
-        // 500 Internal Server Error Cannot invoke "util.Session.getUsername()" because the return value of "java.util.Map.get(Object)" is null
-        // 这个bug是因为Session在关闭Server时被清空了，然后浏览器的cookie没有清空，一般需要在浏览器里面把cookie删掉就好了
 5. 支持线程池 [100%]
 6. 日志记录 [100%?] // 我没看
 7. 支持HTTPS [100%]//已完成
@@ -17,7 +13,7 @@
 1. 基础HTTP服务器 [100%]
 2. 动态内容处理 [100%]
 3. 管理功能 [80%]
-    * 20% 通过管理员命令关闭服务器
+    * 10% 修改一下admin.html, 把返回首页的按钮和关闭服务器的按钮的样式调整一下
 
 可选扩展
 1. 非阻塞I/O(NIO) [50%]
