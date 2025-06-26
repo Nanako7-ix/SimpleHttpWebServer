@@ -104,13 +104,11 @@ public class HttpWebServer {
     }
     
     private void setupSSL() throws Exception {
-        // 加载现有的keystore文件
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (InputStream keyStoreStream = Files.newInputStream(Paths.get("keystore.p12"))) {
             keyStore.load(keyStoreStream, "123456".toCharArray());
         }
-    
-        // 配置SSL上下文
+
         SSLContext sslContext = SSLContext.getInstance("TLS");
         KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(keyStore, "123456".toCharArray());
