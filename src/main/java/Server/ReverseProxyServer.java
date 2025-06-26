@@ -3,29 +3,77 @@ package Server;
 import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
-
+import java.util.*;
 public class ReverseProxyServer {
-    private static final String TARGET_HOST = "localhost";
     private static final int THREAD_POOL_SIZE = 50;
-    private static int Proxy_port = 8080;
-    private static int Target_port = 8080;
+    private final int proxyPort;
+    private final List<BackendServer> backendServers;
     
     private ServerSocket proxySocket;
     private final ExecutorService threadPool;
     private volatile boolean running = false;
+    private final ScheduledExecutorService statusChecker;
     
-    public ReverseProxyServer() {
+    public ReverseProxyServer(int proxyPort, List<BackendServer> backendServers) {
+        this.proxyPort = proxyPort;
+        this.backendServers = backendServers;
         this.threadPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+        this.statusChecker = Executors.newSingleThreadScheduledExecutor();
     }
     
-    public void start(int proxy_port, int target_port) throws IOException {
-        Target_port = target_port;
-        Proxy_port = proxy_port;
-        proxySocket = new ServerSocket(Proxy_port);
+    public void start() throws IOException {
+        proxySocket = new ServerSocket(proxyPort);
         running = true;
-        System.out.println("Reverse Proxy started on port " + Proxy_port);
-        System.out.println("Forwarding all requests to " + TARGET_HOST + ":" + Target_port);
+        
+        // 启动服务器状态检查
+        statusChecker.scheduleAtFixedRate(this::updateServerStatus, 
+            0, 1, TimeUnit.SECONDS);
+        
+        System.out.println("Reverse Proxy started on port " + proxyPort);
+        System.out.println("Backend servers:");
+        for (BackendServer server : backendServers) {
+            System.out.println(" - " + server.host() + ":" + server.port());
+        }
+        
         handleConnections();
+    }
+    
+    private void updateServerStatus() {
+        for (BackendServer server : backendServers) {
+            try (Socket statusSocket = new Socket(server.host(), server.port())) {
+                PrintWriter out = new PrintWriter(statusSocket.getOutputStream(), true);
+                BufferedReader in = new BufferedReader(new InputStreamReader(statusSocket.getInputStream()));
+                
+                // 发送状态查询请求
+                out.println("GET /status HTTP/1.1");
+                out.println("Host: " + server.host());
+                out.println("Connection: close");
+                out.println();
+                
+                // 读取响应
+                String line;
+                while ((line = in.readLine()) != null) {
+                    if (line.startsWith("Content-Length: ")) {
+                        int contentLength = Integer.parseInt(line.substring(16).trim());
+                        char[] content = new char[contentLength];
+                        in.read(content, 0, contentLength);
+                        int connections = Integer.parseInt(new String(content));
+                        server.setActiveConnections(connections);
+                        break;
+                    }
+                }
+            } catch (IOException | NumberFormatException e) {
+                // 标记服务器为不可用
+                server.setActiveConnections(Integer.MAX_VALUE);
+                System.err.println("Error checking status of " + server.host() + ":" + server.port() + ": " + e.getMessage());
+            }
+        }
+    }
+    
+    private BackendServer selectBestServer() {
+        return backendServers.stream()
+            .min(Comparator.comparingInt(BackendServer::activeConnections))
+            .orElse(backendServers.get(0));
     }
     
     private void handleConnections() throws IOException {
@@ -42,16 +90,16 @@ public class ReverseProxyServer {
     }
     
     private void handleClientRequest(Socket clientSocket) {
-            // 1. 连接到目标服务器
-        try (Socket targetSocket = new Socket(TARGET_HOST, Target_port)) {
-            
-            // 2. 获取输入输出流
+        BackendServer bestServer = selectBestServer();
+        
+        try (Socket targetSocket = new Socket(bestServer.host(), bestServer.port())) {
+            // 获取输入输出流
             InputStream clientIn = clientSocket.getInputStream();
             OutputStream clientOut = clientSocket.getOutputStream();
             InputStream targetIn = targetSocket.getInputStream();
             OutputStream targetOut = targetSocket.getOutputStream();
             
-            // 3. 启动两个线程进行双向数据转发
+            // 启动两个线程进行双向数据转发
             ExecutorService pipePool = Executors.newFixedThreadPool(2);
             
             // 客户端 -> 代理 -> 目标服务器
@@ -68,9 +116,9 @@ public class ReverseProxyServer {
                 Thread.currentThread().interrupt();
             }
         } catch (IOException e) {
-            System.err.println("Error connecting to target server: " + e.getMessage());
+            System.err.println("Error connecting to target server " + bestServer.host() + 
+                              ":" + bestServer.port() + ": " + e.getMessage());
         } finally {
-            // 4. 关闭连接
             closeQuietly(clientSocket);
         }
     }
@@ -86,14 +134,12 @@ public class ReverseProxyServer {
                 }
             }
         } catch (SocketException e) {
-            // 连接被关闭是正常情况，不打印错误
             if (!e.getMessage().contains("reset") && !e.getMessage().contains("closed")) {
                 System.err.println("Socket error in pipe: " + e.getMessage());
             }
         } catch (IOException e) {
             System.err.println("I/O error in pipe: " + e.getMessage());
         } finally {
-            // 关闭连接以终止另一端的传输
             closeQuietly(srcSocket);
             closeQuietly(destSocket);
         }
@@ -114,20 +160,43 @@ public class ReverseProxyServer {
         try {
             if (proxySocket != null) proxySocket.close();
             threadPool.shutdown();
+            statusChecker.shutdown();
             System.out.println("Reverse Proxy stopped");
         } catch (IOException e) {
             System.err.println("Error stopping proxy: " + e.getMessage());
         }
     }
     
+    public static class BackendServer {
+        private final String host;
+        private final int port;
+        private volatile int activeConnections;
+        
+        public BackendServer(String host, int port) {
+            this.host = host;
+            this.port = port;
+            this.activeConnections = Integer.MAX_VALUE;
+        }
+        
+        public String host() { return host; }
+        public int port() { return port; }
+        public int activeConnections() { return activeConnections; }
+        public void setActiveConnections(int connections) { this.activeConnections = connections; }
+    }
+    
     public static void main(String[] args) {
-        ReverseProxyServer proxy = new ReverseProxyServer();
+        // 创建后端服务器列表
+        List<BackendServer> backendServers = new ArrayList<>();
+        backendServers.add(new BackendServer("localhost", 7070));
+        backendServers.add(new BackendServer("localhost", 8080));
+        
+        ReverseProxyServer proxy = new ReverseProxyServer(4040, backendServers);
         
         // 添加关闭钩子
         Runtime.getRuntime().addShutdownHook(new Thread(proxy::stop));
         
         try {
-            proxy.start(4040, 8080);
+            proxy.start();
         } catch (IOException e) {
             System.err.println("Failed to start reverse proxy: " + e.getMessage());
         }

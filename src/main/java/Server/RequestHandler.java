@@ -106,6 +106,7 @@ public class RequestHandler implements Runnable {
                 case "/repo" -> handleDownload(request);
                 case "/admin" -> handleAdmin(request);
                 case "/admin/shutdown" -> handleShutdown(request);
+                case "/status" -> handleStatus(request);
                 default -> handleStaticFile(request);
             };
 
@@ -339,9 +340,24 @@ public class RequestHandler implements Runnable {
             }
         }).start();
 
-        // TODO：换一下这个默认界面
         return new HttpResponse(200, "OK", "text/html",
-                "<h1>Server Shutting Down</h1><p>The server will shutdown in 5 seconds...</p>");
+                "<!DOCTYPE html>" +
+                "<html><head><title>Shutdown</title>" +
+                "<link rel='stylesheet' href='/sucess_style.css'>" +
+                "</head><body class='error-page'>" +
+                "<div class='error-container'>" +
+                "<h1>"+ "Shutting Down" + "</h1>" +
+                "<div class='error-details'>" + "The server will shutdown in 5 seconds..." + "</div>" +
+
+                "</div></body></html>");
+    }
+
+    /**
+     * 获取活跃连接数
+     */
+    private HttpResponse handleStatus(HttpRequest request) {
+        String value = String.valueOf(server.getActiveConnections());
+        return new HttpResponse(200, "OK", "text/plain", value.getBytes());
     }
 
     /**
