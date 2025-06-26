@@ -1,7 +1,7 @@
 package Server;
 
-import util.HttpRequest;
-import util.HttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
 
 import java.io.*;
 import java.net.InetAddress;
@@ -22,15 +22,15 @@ public class RequestLogger {
         }
     }
     
-    public synchronized void log(HttpRequest request, HttpResponse response, InetAddress clientAddress) {
+    public synchronized void log(FullHttpRequest request, FullHttpResponse response, InetAddress clientAddress) {
         if (logWriter != null) {
             // Common Log Format: IP - - [timestamp] "method path version" status size
             String logEntry = String.format("%s - - [%s] \"%s\" %d %d",
                 clientAddress.getHostAddress(),
                 dateFormat.format(new Date()),
-                request.toString(),
-                response.getStatusCode(),
-                response.getContentLength()
+                request.method().name() + " " + request.uri() + " " + request.protocolVersion(),
+                response.status().code(),
+                response.content().readableBytes()
             );
             
             logWriter.println(logEntry);

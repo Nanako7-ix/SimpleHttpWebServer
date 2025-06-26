@@ -15,6 +15,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.*;
@@ -35,6 +36,7 @@ public class HttpWebServer {
     private final AtomicInteger activeConnections = new AtomicInteger(0);
     private final AtomicLong totalRequests = new AtomicLong(0);
     private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, User> users = new ConcurrentHashMap<>();
@@ -81,8 +83,7 @@ public class HttpWebServer {
         bossGroup = new NioEventLoopGroup(1);
         workerGroup = new NioEventLoopGroup();
         running = true;
-        
-        // Start HTTP server
+
         ServerBootstrap httpBootstrap = new ServerBootstrap();
         try {
             httpBootstrap.group(bossGroup, workerGroup)
@@ -159,4 +160,5 @@ public class HttpWebServer {
     public AtomicInteger getActiveConnections() { return activeConnections; }
     public AtomicLong getTotalRequests() { return totalRequests; }
     public AtomicLong getStartTime() { return startTime; }
+    public AtomicBoolean getShuttingDown() { return shuttingDown; }
 }
