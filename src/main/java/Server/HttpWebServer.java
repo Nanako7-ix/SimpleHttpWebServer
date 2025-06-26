@@ -76,7 +76,7 @@ public class HttpWebServer {
 
     public void start(int port, boolean enableHttps) throws IOException {
         loadSessions();
-        //修改为IPV6的绑定方式
+
         serverSocket = new ServerSocket();
         serverSocket.bind(new InetSocketAddress("::0",port));
         running = true;
@@ -98,8 +98,7 @@ public class HttpWebServer {
                 System.err.println("Failed to start HTTPS server: " + e.getMessage());
             }
         }
-        
-        // Handle HTTP connections
+
         handleConnections();
     }
     
@@ -118,7 +117,7 @@ public class HttpWebServer {
                             .createServerSocket(HTTPS_PORT);
     }
     
-    private void handleConnections() throws IOException {
+    private void handleConnections() {
         while (running) {
             try {
                 Socket clientSocket = serverSocket.accept();
@@ -170,19 +169,4 @@ public class HttpWebServer {
     public AtomicInteger getActiveConnections() { return activeConnections; }
     public AtomicLong getTotalRequests() { return totalRequests; }
     public AtomicLong getStartTime() { return startTime; }
-    
-    public static void main(String[] args) {
-        HttpWebServer server = new HttpWebServer();
-
-        Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
-
-        try {
-            int port = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_PORT;
-            boolean enableHttps = args.length > 1 && Boolean.parseBoolean(args[1]);
-
-            server.start(port, enableHttps);
-        } catch (IOException e) {
-            System.err.println("Failed to start server: " + e.getMessage());
-        }
-    }
 }
