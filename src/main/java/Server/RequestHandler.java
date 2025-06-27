@@ -1,5 +1,15 @@
 package Server;
 
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
+import io.netty.handler.codec.http.cookie.Cookie;
+import io.netty.handler.codec.http.cookie.DefaultCookie;
+import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
+
+import io.netty.util.CharsetUtil;
 import util.*;
 
 import java.io.*;
@@ -7,106 +17,37 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
-import java.text.SimpleDateFormat;
 
-public class RequestHandler implements Runnable {
-    private final Socket clientSocket;
+public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private final HttpWebServer server;
-    private BufferedReader in;
-    private PrintWriter out;
-    private OutputStream outputStream;
+    private InetSocketAddress clientAddress;
 
-    public RequestHandler(Socket socket, HttpWebServer server) {
-        this.clientSocket = socket;
+    public RequestHandler(HttpWebServer server) {
         this.server = server;
     }
 
     @Override
-    public void run() {
-        try {
-            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            outputStream = clientSocket.getOutputStream();
-            out = new PrintWriter(outputStream, true);
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+        FullHttpResponse response = processRequest(request);
+        ctx.writeAndFlush(response);
 
-            HttpRequest request = parseRequest();
-            if (request != null) {
-                HttpResponse response = processRequest(request);
-                sendResponse(response);
-
-                server.getLogger().log(request, response, clientSocket.getInetAddress());
-            }
-
-        } catch (IOException e) {
-            System.err.println("Error handling request: " + e.getMessage());
-        } finally {
-            server.getActiveConnections().decrementAndGet();
-            try {
-                clientSocket.close();
-            } catch (IOException e) {
-                System.err.println("Error closing client socket: " + e.getMessage());
-            }
-        }
+        clientAddress = (InetSocketAddress) ctx.channel().remoteAddress();
+        server.getLogger().log(request, response, clientAddress.getAddress());
+        server.getActiveConnections().decrementAndGet();
     }
 
-    /**
-     * 解析 HTTP 请求报文
-     * Body 是 String 类型, 不能上传二进制数据 (例如图片等)
-     * @return HttpRequest对象，即 Http 请求报文
-     */
-    private HttpRequest parseRequest() throws IOException {
-        String requestLine = in.readLine();
-        if (requestLine == null || requestLine.isEmpty()) {
-            return null;
-        }
-
-        String[] parts = requestLine.split(" ");
-        if (parts.length != 3) {
-            return null;
-        }
-
-        String method = parts[0];
-        String path = parts[1];
-        String version = parts[2];
-
-        Map<String, String> headers = new HashMap<>();
-        String line;
-        while ((line = in.readLine()) != null && !line.isEmpty()) {
-            int colonIndex = line.indexOf(':');
-            if (colonIndex > 0) {
-                String key = line.substring(0, colonIndex).trim().toLowerCase();
-                String value = line.substring(colonIndex + 1).trim();
-                headers.put(key, value);
-            }
-        }
-
-        String body = "";
-        if ("POST".equals(method) && headers.containsKey("content-length")) {
-            int contentLength = Integer.parseInt(headers.get("content-length"));
-            char[] bodyChars = new char[contentLength];
-            in.read(bodyChars, 0, contentLength);
-            body = new String(bodyChars);
-        }
-
-        return new HttpRequest(method, path, version, headers, body);
-    }
-    private HttpResponse handleConnectionsCount(HttpRequest request) {
-        // 只允许本地访问
-        if (!clientSocket.getInetAddress().isLoopbackAddress()) {
-            return new HttpResponse(403, "Forbidden", "text/plain", "Access denied".getBytes());
-        }
-        int count = server.getActiveConnections().get();
-        return new HttpResponse(200, "OK", "text/plain", String.valueOf(count).getBytes());
-    }
     /**
      * 处理 HTTP 请求, 根据请求的路径调用不同的处理方法
      * @param request 请求报文
      * @return 响应报文
      */
-    private HttpResponse processRequest(HttpRequest request) {
+    private FullHttpResponse processRequest(FullHttpRequest request) {
+        FullHttpResponse response;
         try {
-            String path = request.path();
-            System.out.println(path);
-            return switch (path.contains("?") ? path.substring(0, path.indexOf('?')) : path) {
+            String uri = request.uri();
+            String path = uri.contains("?") ? uri.substring(0, uri.indexOf('?')) : uri;
+            System.out.println(uri);
+            response = switch (path) {
                 case "/login" -> handleLogin(request);
                 case "/logout" -> handleLogout(request);
                 case "/search" -> handleSearch(request);
@@ -116,22 +57,60 @@ public class RequestHandler implements Runnable {
                 case "/admin/connections" -> handleConnectionsCount(request);
                 default -> handleStaticFile(request);
             };
-
         } catch (Exception e) {
-            return new HttpResponse(500, "Internal Server Error", "text/html",
-                    errorHTMLPage(500, "Internal Server Error", "Internal Server Error: " + e.getMessage()));
+            String content = errorHTMLPage(
+                    500,
+                    "Internal Server Error",
+                    "Internal Server Error: " + e.getMessage()
+            );
+            response = new DefaultFullHttpResponse (
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            e.printStackTrace();
         }
+        return response;
+    }
+
+    private FullHttpResponse handleConnectionsCount(FullHttpRequest request) {
+        FullHttpResponse response;
+        if (!clientAddress.getAddress().isLoopbackAddress()) {
+            String content = errorHTMLPage(
+                    403,
+                    "Forbidden",
+                    "access denied, only localhost can access this page."
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.FORBIDDEN,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+        } else {
+            int count = server.getActiveConnections().get();
+            response = new DefaultFullHttpResponse (
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.OK,
+                    Unpooled.copiedBuffer(String.valueOf(count), StandardCharsets.UTF_8)
+            );
+        }
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        return response;
     }
 
     /**
      * 处理登录请求
      */
-    private HttpResponse handleLogin(HttpRequest request) {
-        if ("GET".equals(request.method())) {
-            return handleStaticFile(new HttpRequest("GET", "/login.html", request.version(),
-                    request.headers(), ""));
-        } else if ("POST".equals(request.method())) {
-            Map<String, String> params = parseFormData(request.body());
+    private FullHttpResponse handleLogin(FullHttpRequest request) {
+        FullHttpResponse response;
+        if (request.method().equals(HttpMethod.GET)) {
+            request.setUri("/login.html");
+            response = handleStaticFile(request);
+        } else if (request.method().equals(HttpMethod.POST)) {
+            Map<String, String> params = parseFormData(request.content().toString(CharsetUtil.UTF_8));
             String username = params.get("username");
             String password = params.get("password");
 
@@ -144,101 +123,220 @@ public class RequestHandler implements Runnable {
                     server.getSessions().put(sessionId, session);
 
                     try {
-                        // 读取文件内容
                         File file = new File("static/login_success.html");
                         String content = new String(Files.readAllBytes(file.toPath()));
-                        // 替换占位符
                         content = content.replace("{{ username }}", user.name());
 
-                        HttpResponse httpResponse = new HttpResponse(200, "OK", "text/html", content.getBytes());
-                        httpResponse.addCookie("sessionId", sessionId);
-                        return httpResponse;
+                        response = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_1,
+                                HttpResponseStatus.OK,
+                                Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                        );
+                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+
+                        Cookie cookie = new DefaultCookie("sessionId", sessionId);
+                        cookie.setHttpOnly(true);
+                        cookie.setPath("/");
+                        cookie.setMaxAge(3600);
+                        String encodedCookie = ServerCookieEncoder.LAX.encode(cookie);
+                        response.headers().add(HttpHeaderNames.SET_COOKIE, encodedCookie);
                     } catch (IOException e) {
-                        return new HttpResponse(500, "Internal Server Error", "text/html",
-                                errorHTMLPage(500, "Internal Server Error", "Error reading login success page: " + e.getMessage()));
+                        String content = errorHTMLPage(
+                                500,
+                                "Internal Server Error",
+                                "Error reading login success page: " + e.getMessage()
+                        );
+                        response = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_1,
+                                HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                                Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                        );
+                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                        e.printStackTrace();
                     }
                 } else {
-                    return new HttpResponse(401, "Unauthorized", "text/html",
-                            errorHTMLPage(401, "Unauthorized", "Invalid credentials, please try again."));
+                    String content = errorHTMLPage(
+                            401,
+                            "Unauthorized",
+                            "Invalid credentials, please try again."
+                    );
+                    response = new DefaultFullHttpResponse(
+                            HttpVersion.HTTP_1_1,
+                            HttpResponseStatus.UNAUTHORIZED,
+                            Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                    );
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
                 }
+            } else {
+                String content = errorHTMLPage(
+                        400,
+                        "Bad Request",
+                        "Username and password are required."
+                );
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.BAD_REQUEST,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
             }
+        } else {
+            String content = errorHTMLPage(
+                    400,
+                    "Bad Request",
+                    "Bad Request"
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.BAD_REQUEST,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         }
-
-        return new HttpResponse(400, "Bad Request", "text/html",
-                errorHTMLPage(400, "Bad Request", "Bad Request"));
+        return response;
     }
 
     /**
      * 处理退出登录请求
      */
-    private HttpResponse handleLogout(HttpRequest request) {
+    private FullHttpResponse handleLogout(FullHttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
-        assert (sessionId != null); // 返回一个当前尚未登陆的页面
+        FullHttpResponse response;
 
-        User user = server.getUsers().get(server.getSessions().get(sessionId).getUsername());
-        server.getSessions().remove(sessionId);
+        if (sessionId == null) {
+            String content = errorHTMLPage(
+                    400,
+                    "Bad Request",
+                    "No session found, please login first."
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.BAD_REQUEST,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        } else {
+            User user = server.getUsers().get(server.getSessions().get(sessionId).getUsername());
+            server.getSessions().remove(sessionId);
 
-        try {
-            // 读取文件内容
-            File file = new File("static/logout_success.html");
-            String content = new String(Files.readAllBytes(file.toPath()));
-            // 替换占位符
-            content = content.replace("{{ username }}", user.name());
+            try {
+                File file = new File("static/logout_success.html");
+                String content = new String(Files.readAllBytes(file.toPath()));
+                content = content.replace("{{ username }}", user.name());
 
-            HttpResponse httpResponse = new HttpResponse(200, "OK", "text/html", content.getBytes());
-            httpResponse.eraseCookie("sessionId");
-            return httpResponse;
-        } catch (IOException e) {
-            return new HttpResponse(500, "Internal Server Error", "text/html",
-                    errorHTMLPage(500, "Internal Server Error", "Error reading login success page" + e.getMessage()));
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.OK,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+
+                Cookie cookie = new DefaultCookie("sessionId", "DeleteCookie");
+                cookie.setHttpOnly(true);
+                cookie.setPath("/");
+                cookie.setMaxAge(0);
+                String encodedCookie = ServerCookieEncoder.LAX.encode(cookie);
+                response.headers().add(HttpHeaderNames.SET_COOKIE, encodedCookie);
+            } catch (IOException e) {
+                String content = errorHTMLPage(
+                        500,
+                        "Internal Server Error",
+                        "Error reading login success page" + e.getMessage()
+                );
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                e.printStackTrace();
+            }
         }
+
+        return response;
     }
 
     /**
      * 处理仓库的文件搜索请求
      */
-    private HttpResponse handleSearch(HttpRequest request) {
-        String query = extractQueryParam(request.path());
-
+    private FullHttpResponse handleSearch(FullHttpRequest request) {
+        String query = extractQueryParam(request.uri());
         File htmlFile = new File("static/store.html");
+        FullHttpResponse response;
+
         if (!htmlFile.exists()) {
-            return new HttpResponse(404, "Not Found", "text/html",
-                    errorHTMLPage(404, "Not Found", "Page Not Found"));
-        }
-
-        try {
-            // 读取模板内容
-            String content = Files.readString(htmlFile.toPath(), StandardCharsets.UTF_8);
-
-            // 动态插入文件列表
-            File[] files = new File(HttpWebServer.RECOURSES_DIR).listFiles();
-            StringBuilder fileListHtml = new StringBuilder();
-            if (files != null) {
-                int index = 0;
-                for (File file : files) {
-                    if (query == null || file.getName().contains(query)) {
-                        fileListHtml.append("<div class='file-item' style='animation-delay: ")
-                                .append(0.4 * index / files.length)
-                                .append("s;'>")
-                                .append("<div>").append(file.getName()).append("</div>")
-                                .append("<a href='/repo?").append(file.getName()).append("'>Download</a>")
-                                .append("</div>\n");
-                        index++;
+            String content = errorHTMLPage(
+                    404,
+                    "Not Found",
+                    "Page Not Found"
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.NOT_FOUND,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        } else {
+            try {
+                // 读取模板内容
+                String content = Files.readString(htmlFile.toPath(), StandardCharsets.UTF_8);
+                // 动态插入文件列表
+                File[] files = new File(HttpWebServer.RECOURSES_DIR).listFiles();
+                StringBuilder fileListHtml = new StringBuilder();
+                if (files != null) {
+                    int index = 0;
+                    for (File file : files) {
+                        if (query == null || file.getName().contains(query)) {
+                            fileListHtml.append("<div class='file-item' style='animation-delay: ")
+                                    .append(0.4 * index / files.length)
+                                    .append("s;'>")
+                                    .append("<div>").append(file.getName()).append("</div>")
+                                    .append("<a href='/repo?").append(file.getName()).append("'>Download</a>")
+                                    .append("</div>\n");
+                            index++;
+                        }
                     }
                 }
+                content = content.replace("{{fileList}}", fileListHtml.toString());
+
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.OK,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            } catch (IOException e) {
+                String content = errorHTMLPage(
+                        404,
+                        "Not Found",
+                        "Page Not Found"
+                );
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.NOT_FOUND,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
             }
-
-            content = content.replace("{{fileList}}", fileListHtml.toString());
-
-            content = content.replace("{{fileList}}", fileListHtml.toString());
-            return new HttpResponse(200, "OK", "text/html", content.getBytes(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            return new HttpResponse(500, "Internal Server Error", "text/html",
-                    errorHTMLPage(500, "Internal Server Error", "Internal Server Error" + e.getMessage()));
         }
+
+        return response;
     }
 
-    // 从路径提取查询参数 ?q=search
+    /**
+     * 从请求路径中提取查询参数 ?q=search
+     */
     private String extractQueryParam(String path) {
         if (path.contains("?")) {
             String query = path.split("\\?")[1];
@@ -252,102 +350,189 @@ public class RequestHandler implements Runnable {
     /**
      * 处理文件下载请求
      */
-    private HttpResponse handleDownload(HttpRequest request) {
-        String path = request.path();
-        String filename = path.substring("/repo/".length()); // 去除前缀
+    private FullHttpResponse handleDownload(FullHttpRequest request) {
+        FullHttpResponse response;
+        String path = request.uri();
+        String filename = path.substring("/repo/".length());
+        File file = new File(HttpWebServer.RECOURSES_DIR, filename);
 
-        File file = new File(HttpWebServer.RECOURSES_DIR, filename); // 资源目录 + 文件名
         if (!file.exists() || file.isDirectory()) {
-            return new HttpResponse(404, "Not Found", "text/html",
-                    errorHTMLPage(404, "Not Found", "Page Not Found"));
+            String content = errorHTMLPage(
+                    404,
+                    "Not Found",
+                    "Page Not Found"
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.NOT_FOUND,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        } else {
+            try {
+                byte[] fileContent = Files.readAllBytes(file.toPath());
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.OK,
+                        Unpooled.wrappedBuffer(fileContent)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/octet-stream");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, fileContent.length);
+                response.headers().set(HttpHeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
+            } catch (IOException e) {
+                String content = errorHTMLPage(
+                        500,
+                        "Internal Server Error",
+                        "Internal Server Error" + e.getMessage()
+                );
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                e.printStackTrace();
+            }
         }
-
-        try {
-            byte[] fileContent = Files.readAllBytes(file.toPath());
-
-            HttpResponse response = new HttpResponse(200, "OK",
-                    "application/octet-stream", fileContent);
-            response.addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-            return response;
-        } catch (IOException e) {
-            return new HttpResponse(500, "Internal Server Error", "text/html",
-                    errorHTMLPage(500, "Internal Server Error", "Internal Server Error" + e.getMessage()));
-        }
+        return response;
     }
 
     /**
      * 处理访问管理页面请求
      */
-    private HttpResponse handleAdmin(HttpRequest request) {
+    private FullHttpResponse handleAdmin(FullHttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
+        FullHttpResponse response;
 
         if (session == null || !session.getUsername().equals("admin")) {
-            return new HttpResponse(403, "Forbidden", "text/html",
-                    errorHTMLPage(403, "Forbidden", "Admin access required"));
-        }
+            String content = errorHTMLPage(
+                    403,
+                    "Forbidden",
+                    "Admin access required"
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.FORBIDDEN,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        } else {
+            try {
+                // 读取 admin.html 文件
+                File adminFile = new File("static/admin.html");
+                if (adminFile.exists() && adminFile.isFile()) {
+                    String content = new String(Files.readAllBytes(adminFile.toPath()));
 
-        try {
-            // 读取 admin.html 文件
-            File adminFile = new File("static/admin.html");
-            if (adminFile.exists() && adminFile.isFile()) {
-                String content = new String(Files.readAllBytes(adminFile.toPath()));
+                    // 获取服务器数据
+                    long activeConnections = server.getActiveConnections().get();
+                    long totalRequests = server.getTotalRequests().get();
+                    long startTime = server.getStartTime().get();
+                    long uptime = (System.currentTimeMillis() - startTime) / 1000;
 
-                // 获取服务器数据
-                long activeConnections = server.getActiveConnections().get();
-                long totalRequests = server.getTotalRequests().get();
-                long startTime = server.getStartTime().get();
-                long uptime = (System.currentTimeMillis() - startTime) / 1000;
+                    // 替换占位符
+                    content = content.replace("{{ activeConnections }}", String.valueOf(activeConnections));
+                    content = content.replace("{{ totalRequests }}", String.valueOf(totalRequests));
+                    content = content.replace("{{ startTime }}", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(startTime)));
+                    content = content.replace("{{ uptime }}", String.valueOf(uptime));
 
-                // 替换占位符
-                content = content.replace("{{ activeConnections }}", String.valueOf(activeConnections));
-                content = content.replace("{{ totalRequests }}", String.valueOf(totalRequests));
-                content = content.replace("{{ startTime }}", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(startTime)));
-                content = content.replace("{{ uptime }}", String.valueOf(uptime));
-
-                return new HttpResponse(200, "OK", "text/html", content.getBytes());
-            } else {
-                return new HttpResponse(404, "Not Found", "text/html",
-                        errorHTMLPage(404, "Not Found", "Page Not Found"));
+                    response = new DefaultFullHttpResponse(
+                            HttpVersion.HTTP_1_1,
+                            HttpResponseStatus.OK,
+                            Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                    );
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                } else {
+                    String content = errorHTMLPage(
+                            404,
+                            "Not Found",
+                            "Page Not Found"
+                    );
+                    response = new DefaultFullHttpResponse(
+                            HttpVersion.HTTP_1_1,
+                            HttpResponseStatus.NOT_FOUND,
+                            Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                    );
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                }
+            } catch (IOException e) {
+                String content = errorHTMLPage(
+                        500,
+                        "Internal Server Error",
+                        "Error reading admin page: " + e.getMessage()
+                );
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            return new HttpResponse(500, "Internal Server Error", "text/html",
-                    errorHTMLPage(500, "Internal Server Error", "Error reading admin page: " + e.getMessage()));
         }
+        return response;
     }
 
     /**
      * 处理关闭服务器请求
      */
-    private HttpResponse handleShutdown(HttpRequest request) {
+    private FullHttpResponse handleShutdown(FullHttpRequest request) {
         String sessionId = getCookieValue(request, "sessionId");
         Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
+        FullHttpResponse response;
 
         if (session == null || !session.getUsername().equals("admin")) {
-            return new HttpResponse(403, "Forbidden", "text/html",
-                    errorHTMLPage(403, "Forbidden", "你没有权限."));
+            String content = errorHTMLPage(
+                    403,
+                    "Forbidden",
+                    "Admin access required"
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.FORBIDDEN,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        } else {
+            // 防止重复关闭服务器
+            if (!server.getShuttingDown().get()) {
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(5000);
+                        server.stop();
+                        System.exit(0);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }).start();
+                server.getShuttingDown().set(true);
+            }
+            String content = "<!DOCTYPE html>" +
+                    "<html><head><title>Shutdown</title>" +
+                    "<link rel='stylesheet' href='/success_style.css'>" +
+                    "</head><body class='error-page'>" +
+                    "<div class='error-container'>" +
+                    "<h1>"+ "Shutting Down" + "</h1>" +
+                    "<div class='error-details'>" + "The server will shutdown in 5 seconds..." + "</div>" +
+                    "</div></body></html>";
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.OK,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            response.headers().set(HttpHeaderNames.CONNECTION, "close");
         }
 
-        new Thread(() -> {
-            try {
-                Thread.sleep(5000);
-                server.stop();
-                System.exit(0);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }).start();
-
-        return new HttpResponse(200, "OK", "text/html",
-                "<!DOCTYPE html>" +
-                "<html><head><title>Shutdown</title>" +
-                "<link rel='stylesheet' href='/sucess_style.css'>" +
-                "</head><body class='error-page'>" +
-                "<div class='error-container'>" +
-                "<h1>"+ "Shutting Down" + "</h1>" +
-                "<div class='error-details'>" + "The server will shutdown in 5 seconds..." + "</div>" +
-
-                "</div></body></html>");
+        return response;
     }
 
     /**
@@ -355,68 +540,70 @@ public class RequestHandler implements Runnable {
      * @param request 请求报文
      * @return 响应报文
      */
-    private HttpResponse handleStaticFile(HttpRequest request) {
-        String path = request.path();
+    private FullHttpResponse handleStaticFile(FullHttpRequest request) {
+        String path = request.uri();
+        System.out.println("handleStaticFile: " + path);
         if (path.equals("/")) {
             path = "/index.html";
         }
-
         File file = new File("static" + path);
+        FullHttpResponse response;
+
         if (!file.exists() || file.isDirectory()) {
-            return new HttpResponse(404, "Not Found", "text/html",
-                    errorHTMLPage(404, "Not Found", "Page Not Found"));
-        }
-
-        try {
-            byte[] byteContent = java.nio.file.Files.readAllBytes(file.toPath());
-            String mimeType = getMimeType(file.getName());
-
-            // dong tai chu li login/logout he admin de xian shi
-            String content = new String(byteContent, StandardCharsets.UTF_8);
-            String sessionId = getCookieValue(request, "sessionId");
-            String replaceHref = (sessionId != null) ? "/logout" : "/login";
-            String replaceText = (sessionId != null) ? "Logout" : "Login";
-            content = content.replaceAll(
-                "<a href=\"/auth_link\">auth_link</a>",
-                "<a href=\"" + replaceHref + "\">" + replaceText + "</a>"
+            String content = errorHTMLPage(
+                    404,
+                    "Forbidden",
+                    "Admin access required"
             );
-            Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
-            boolean isAdmin = session != null && "admin".equals(session.getUsername());
-            if (!isAdmin) content = content.replace("<a href='/admin'>Admin</a>", "");
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.NOT_FOUND,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        } else {
+            try {
+                byte[] byteContent = java.nio.file.Files.readAllBytes(file.toPath());
+                String mimeType = getMimeType(file.getName());
 
-            return new HttpResponse(200, "OK", mimeType, content.getBytes());
-        } catch (IOException e) {
-            return new HttpResponse(500, "Internal Server Error", "text/html",
-                    errorHTMLPage(500, "Internal Server Error", "Error reading file: " + e.getMessage()));
-        }
-    }
-    
-    /**
-     * 发送 HTTP 响应报文
-     * 这里默认使用 HTTP/1.1 协议, 根据加分项, 这里需要支持 HTTPS
-     * @param response 需要发送的 HTTP 响应对象
-     */
-    private void sendResponse(HttpResponse response) throws IOException {
-        out.println("HTTP/1.1 " + response.getStatusCode() + " " + response.getStatusText());
+                String content = new String(byteContent, StandardCharsets.UTF_8);
+                String sessionId = getCookieValue(request, "sessionId");
+                String replaceHref = (sessionId != null) ? "/logout" : "/login";
+                String replaceText = (sessionId != null) ? "Logout" : "Login";
+                content = content.replaceAll(
+                    "<a href=\"/auth_link\">auth_link</a>",
+                    "<a href=\"" + replaceHref + "\">" + replaceText + "</a>"
+                );
+                Session session = sessionId != null ? server.getSessions().get(sessionId) : null;
+                boolean isAdmin = session != null && "admin".equals(session.getUsername());
+                if (!isAdmin) content = content.replace("<a href='/admin'>Admin</a>", "");
 
-        out.println("Content-Type: " + response.getContentType());
-        out.println("Content-Length: " + response.getContentLength());
-        out.println("Server: CustomHTTPServer/1.0");
-        out.println("Date: " + new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH).format(new Date()));
-        for (Map.Entry<String, String> header : response.getHeaders().entrySet()) {
-            out.println(header.getKey() + ": " + header.getValue());
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.OK,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, mimeType);
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            } catch (IOException e) {
+                String content = errorHTMLPage(
+                        500,
+                        "Internal Server Error",
+                        "Error reading file: " + e.getMessage()
+                );
+                response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                        Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+                );
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                e.printStackTrace();
+            }
         }
-        for (String cookie : response.getCookies()) {
-            out.println("Set-Cookie: " + cookie);
-        }
-
-        out.println();
-        out.flush();
-
-        if (response.getContent() != null) {
-            outputStream.write(response.getContent());
-            outputStream.flush();
-        }
+        System.out.println("Response status: " + response.status());
+        return response;
     }
 
     /**
@@ -442,19 +629,17 @@ public class RequestHandler implements Runnable {
 
     /**
      * 获取指定 cookieName=cookie 的 cookie 值
-     * 感觉这个似乎没什么改的必要
      * @param request 解析的 HTTP 请求对象
      * @param cookieName 需要的 cookie 名称
      * @return cookie 的值
      */
-    private String getCookieValue(HttpRequest request, String cookieName) {
-        String cookieHeader = request.headers().get("cookie");
+    private String getCookieValue(FullHttpRequest request, String cookieName) {
+        String cookieHeader = request.headers().get(HttpHeaderNames.COOKIE);
         if (cookieHeader != null) {
-            String[] cookies = cookieHeader.split(";");
-            for (String cookie : cookies) {
-                String[] parts = cookie.trim().split("=", 2);
-                if (parts.length == 2 && parts[0].equals(cookieName)) {
-                    return parts[1];
+            Set<Cookie> cookies = ServerCookieDecoder.STRICT.decode(cookieHeader);
+            for (Cookie cookie : cookies) {
+                if (cookie.name().equals(cookieName)) {
+                    return cookie.value();
                 }
             }
         }
