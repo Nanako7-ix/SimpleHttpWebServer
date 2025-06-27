@@ -39,3 +39,4 @@ build/
 
 ### 忽略日志 ###
 access.log
+sessions.dat

@@ -94,6 +94,20 @@ public class HttpWebServer {
                             ch.pipeline()
                               .addLast(new HttpServerCodec())
                               .addLast(new HttpObjectAggregator(65536))
+                              .addLast(new ChannelInboundHandlerAdapter() {
+                                  @Override
+                                  public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                                      HttpWebServer.this.getActiveConnections().incrementAndGet();
+                                      System.out.println("New connection, active: " + HttpWebServer.this.getActiveConnections().get());
+                                      super.channelActive(ctx);
+                                  }
+                                  @Override
+                                  public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                                      HttpWebServer.this.getActiveConnections().decrementAndGet();
+                                      System.out.println("Connection closed, active: " + HttpWebServer.this.getActiveConnections().get());
+                                      super.channelInactive(ctx);
+                                  }
+                              })
                               .addLast(new RequestHandler(HttpWebServer.this));
                         }
                     });
@@ -115,6 +129,20 @@ public class HttpWebServer {
                               .addLast(sslCtx.newHandler(ch.alloc()))
                               .addLast(new HttpServerCodec())
                               .addLast(new HttpObjectAggregator(65536))
+                              .addLast(new ChannelInboundHandlerAdapter() {
+                                  @Override
+                                  public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                                      HttpWebServer.this.getActiveConnections().incrementAndGet();
+                                      System.out.println("New connection, active: " + HttpWebServer.this.getActiveConnections().get());
+                                      super.channelActive(ctx);
+                                  }
+                                  @Override
+                                  public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                                      HttpWebServer.this.getActiveConnections().decrementAndGet();
+                                      System.out.println("Connection closed, active: " + HttpWebServer.this.getActiveConnections().get());
+                                      super.channelInactive(ctx);
+                                  }
+                              })
                               .addLast(new RequestHandler(HttpWebServer.this));
                         }
                     });
