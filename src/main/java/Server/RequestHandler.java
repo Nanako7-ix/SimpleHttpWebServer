@@ -20,7 +20,6 @@ import java.util.*;
 
 public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private final HttpWebServer server;
-    private InetSocketAddress clientAddress;
 
     public RequestHandler(HttpWebServer server) {
         this.server = server;
@@ -31,7 +30,7 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         FullHttpResponse response = processRequest(request);
         ctx.writeAndFlush(response);
 
-        clientAddress = (InetSocketAddress) ctx.channel().remoteAddress();
+        InetSocketAddress clientAddress = (InetSocketAddress) ctx.channel().remoteAddress();
         server.getLogger().log(request, response, clientAddress.getAddress());
         server.getTotalRequests().incrementAndGet();
     }
