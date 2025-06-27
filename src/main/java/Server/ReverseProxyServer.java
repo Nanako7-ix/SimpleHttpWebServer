@@ -4,7 +4,7 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
-
+import java.util.regex.*;
 public class ReverseProxyServer {
     private static final String TARGET_HOST = "localhost";
     private static final int THREAD_POOL_SIZE = 50;
@@ -56,19 +56,18 @@ public class ReverseProxyServer {
                 
                 // 发送状态查询请求
                 out.println("GET /admin/connections HTTP/1.1");
-                out.println("Host: " + TARGET_HOST + ":" + server.port);
-                out.println("Connection: close");
                 out.println();
                 
                 // 解析响应
                 String line;
-                boolean inBody = false;
                 while ((line = in.readLine()) != null) {
-                    if (line.isEmpty()) inBody = true;
-                    if (inBody) {
-                        server.activeConnections = Integer.parseInt(line.trim());
+                    Pattern pattern = Pattern.compile("^content-length:\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
+                    Matcher matcher = pattern.matcher(line);
+                    if (matcher.find()) {
+                        server.activeConnections = Integer.parseInt(matcher.group(1));
+                        System.out.println(server.activeConnections);
                         break;
-                    }
+                   }
                 }
             } catch (Exception e) {
                 System.err.println("Error updating stats for " + server.port + ": " + e.getMessage());
