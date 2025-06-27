@@ -70,12 +70,12 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             );
             response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
             response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-            e.printStackTrace();
         }
         return response;
     }
 
     private FullHttpResponse handleConnectionsCount(FullHttpRequest request) {
+<<<<<<< HEAD
         FullHttpResponse response;    
         int count = server.getActiveConnections().get() / 2;
         response = new DefaultFullHttpResponse (
@@ -83,6 +83,28 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 HttpResponseStatus.OK,
                 Unpooled.copiedBuffer(String.valueOf(count), StandardCharsets.UTF_8)
         );
+=======
+        FullHttpResponse response;
+        if (!clientAddress.getAddress().isLoopbackAddress()) {
+            String content = errorHTMLPage(
+                    403,
+                    "Forbidden",
+                    "access denied, only localhost can access this page."
+            );
+            response = new DefaultFullHttpResponse(
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.FORBIDDEN,
+                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
+            );
+        } else {
+            int count = server.getActiveUsers().get();
+            response = new DefaultFullHttpResponse (
+                    HttpVersion.HTTP_1_1,
+                    HttpResponseStatus.OK,
+                    Unpooled.copiedBuffer(String.valueOf(count), StandardCharsets.UTF_8)
+            );
+        }
+>>>>>>> 3ad8e3550bd43dd0e8c2a1365a99c9730798315c
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, count);
         return response;
@@ -128,6 +150,8 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                         cookie.setMaxAge(3600);
                         String encodedCookie = ServerCookieEncoder.LAX.encode(cookie);
                         response.headers().add(HttpHeaderNames.SET_COOKIE, encodedCookie);
+
+                        server.getActiveUsers().incrementAndGet();
                     } catch (IOException e) {
                         String content = errorHTMLPage(
                                 500,
@@ -141,7 +165,6 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                         );
                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
                         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-                        e.printStackTrace();
                     }
                 } else {
                     String content = errorHTMLPage(
@@ -231,6 +254,8 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 cookie.setMaxAge(0);
                 String encodedCookie = ServerCookieEncoder.LAX.encode(cookie);
                 response.headers().add(HttpHeaderNames.SET_COOKIE, encodedCookie);
+
+                server.getActiveUsers().decrementAndGet();
             } catch (IOException e) {
                 String content = errorHTMLPage(
                         500,
@@ -244,7 +269,6 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 );
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
                 response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-                e.printStackTrace();
             }
         }
 
@@ -380,7 +404,6 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 );
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
                 response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-                e.printStackTrace();
             }
         }
         return response;
@@ -415,13 +438,13 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                     String content = new String(Files.readAllBytes(adminFile.toPath()));
 
                     // 获取服务器数据
-                    long activeConnections = server.getActiveConnections().get();
-                    long totalRequests = server.getTotalRequests().get() / 2;
+                    long activeUsers = server.getActiveUsers().get();
+                    long totalRequests = server.getTotalRequests().get();
                     long startTime = server.getStartTime().get();
                     long uptime = (System.currentTimeMillis() - startTime) / 1000;
 
                     // 替换占位符
-                    content = content.replace("{{ activeConnections }}", String.valueOf(activeConnections));
+                    content = content.replace("{{ activeUsers }}", String.valueOf(activeUsers));
                     content = content.replace("{{ totalRequests }}", String.valueOf(totalRequests));
                     content = content.replace("{{ startTime }}", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(startTime)));
                     content = content.replace("{{ uptime }}", String.valueOf(uptime));
@@ -460,7 +483,6 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 );
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
                 response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-                e.printStackTrace();
             }
         }
         return response;
@@ -587,7 +609,6 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 );
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
                 response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-                e.printStackTrace();
             }
         }
         System.out.println("Response status: " + response.status());

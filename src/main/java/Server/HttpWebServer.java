@@ -33,7 +33,7 @@ public class HttpWebServer {
     private Channel httpsServerChannel;
     private volatile boolean running = false;
 
-    private final AtomicInteger activeConnections = new AtomicInteger(0);
+    private final AtomicInteger activeUsers = new AtomicInteger(0);
     private final AtomicLong totalRequests = new AtomicLong(0);
     private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
@@ -63,6 +63,7 @@ public class HttpWebServer {
                 Map<String, Session> loadedSessions = (Map<String, Session>) obj;
                 sessions.putAll(loadedSessions);
                 System.out.println("Loaded " + loadedSessions.size() + " sessions from file.");
+                activeUsers.set(loadedSessions.size());
             }
         } catch (Exception e) {
             System.err.println("Failed to load sessions: " + e.getMessage());
@@ -94,20 +95,6 @@ public class HttpWebServer {
                             ch.pipeline()
                               .addLast(new HttpServerCodec())
                               .addLast(new HttpObjectAggregator(65536))
-                              .addLast(new ChannelInboundHandlerAdapter() {
-                                  @Override
-                                  public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                                      HttpWebServer.this.getActiveConnections().incrementAndGet();
-                                      System.out.println("New connection, active: " + HttpWebServer.this.getActiveConnections().get());
-                                      super.channelActive(ctx);
-                                  }
-                                  @Override
-                                  public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                                      HttpWebServer.this.getActiveConnections().decrementAndGet();
-                                      System.out.println("Connection closed, active: " + HttpWebServer.this.getActiveConnections().get());
-                                      super.channelInactive(ctx);
-                                  }
-                              })
                               .addLast(new RequestHandler(HttpWebServer.this));
                         }
                     });
@@ -129,20 +116,6 @@ public class HttpWebServer {
                               .addLast(sslCtx.newHandler(ch.alloc()))
                               .addLast(new HttpServerCodec())
                               .addLast(new HttpObjectAggregator(65536))
-                              .addLast(new ChannelInboundHandlerAdapter() {
-                                  @Override
-                                  public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                                      HttpWebServer.this.getActiveConnections().incrementAndGet();
-                                      System.out.println("New connection, active: " + HttpWebServer.this.getActiveConnections().get());
-                                      super.channelActive(ctx);
-                                  }
-                                  @Override
-                                  public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                                      HttpWebServer.this.getActiveConnections().decrementAndGet();
-                                      System.out.println("Connection closed, active: " + HttpWebServer.this.getActiveConnections().get());
-                                      super.channelInactive(ctx);
-                                  }
-                              })
                               .addLast(new RequestHandler(HttpWebServer.this));
                         }
                     });
@@ -185,7 +158,7 @@ public class HttpWebServer {
     public Map<String, Session> getSessions() { return sessions; }
     public Map<String, User> getUsers() { return users; }
     public RequestLogger getLogger() { return logger; }
-    public AtomicInteger getActiveConnections() { return activeConnections; }
+    public AtomicInteger getActiveUsers() { return activeUsers; }
     public AtomicLong getTotalRequests() { return totalRequests; }
     public AtomicLong getStartTime() { return startTime; }
     public AtomicBoolean getShuttingDown() { return shuttingDown; }

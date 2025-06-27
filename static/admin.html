@@ -140,9 +140,10 @@
     <h1>Admin Panel</h1>
     <div class="admin-section">
         <h2>Server Information</h2>
-        <p>Active Connections: {{ activeConnections }}</p>
+        <p>Active Users: {{ activeUsers }}</p>
         <p>Total Requests: {{ totalRequests }}</p>
         <p>Start Time: {{ startTime }}</p>
+        <p>Uptime: {{ uptime }} s</p>
     </div>
     <div style = "display: flex; justify-content: center; width:100%; text-align: center;">
         <div class="admin-section" style = "width:10%;" onclick="window.location.href='/'">
