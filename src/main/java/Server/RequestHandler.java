@@ -71,6 +71,8 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
             response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         }
+        response.headers().set(HttpHeaderNames.SERVER, "Netty HTTP Server");
+        response.headers().set(HttpHeaderNames.DATE, new Date());
         return response;
     }
 
