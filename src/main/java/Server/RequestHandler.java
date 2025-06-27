@@ -75,7 +75,6 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     }
 
     private FullHttpResponse handleConnectionsCount(FullHttpRequest request) {
-<<<<<<< HEAD
         FullHttpResponse response;    
         int count = server.getActiveConnections().get() / 2;
         response = new DefaultFullHttpResponse (
@@ -83,28 +82,6 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 HttpResponseStatus.OK,
                 Unpooled.copiedBuffer(String.valueOf(count), StandardCharsets.UTF_8)
         );
-=======
-        FullHttpResponse response;
-        if (!clientAddress.getAddress().isLoopbackAddress()) {
-            String content = errorHTMLPage(
-                    403,
-                    "Forbidden",
-                    "access denied, only localhost can access this page."
-            );
-            response = new DefaultFullHttpResponse(
-                    HttpVersion.HTTP_1_1,
-                    HttpResponseStatus.FORBIDDEN,
-                    Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
-            );
-        } else {
-            int count = server.getActiveUsers().get();
-            response = new DefaultFullHttpResponse (
-                    HttpVersion.HTTP_1_1,
-                    HttpResponseStatus.OK,
-                    Unpooled.copiedBuffer(String.valueOf(count), StandardCharsets.UTF_8)
-            );
-        }
->>>>>>> 3ad8e3550bd43dd0e8c2a1365a99c9730798315c
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, count);
         return response;
