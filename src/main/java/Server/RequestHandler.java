@@ -542,13 +542,14 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
      */
     private FullHttpResponse handleStaticFile(FullHttpRequest request) {
         String path = request.uri();
-        System.out.println("handleStaticFile: " + path);
         if (path.equals("/")) {
             path = "/index.html";
         }
+        System.out.println("handleStaticFile: " + path);
         File file = new File("static" + path);
         FullHttpResponse response;
-
+        
+        System.out.println(file.getPath());
         if (!file.exists() || file.isDirectory()) {
             String content = errorHTMLPage(
                     404,
