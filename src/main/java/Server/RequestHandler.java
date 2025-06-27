@@ -76,7 +76,7 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
     private FullHttpResponse handleConnectionsCount(FullHttpRequest request) {
         FullHttpResponse response;    
-        int count = server.getActiveConnections().get() / 2;
+        int count = server.getActiveUsers().get();
         response = new DefaultFullHttpResponse (
                 HttpVersion.HTTP_1_1,
                 HttpResponseStatus.OK,
