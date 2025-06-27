@@ -33,7 +33,7 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
         clientAddress = (InetSocketAddress) ctx.channel().remoteAddress();
         server.getLogger().log(request, response, clientAddress.getAddress());
-        server.getActiveConnections().decrementAndGet();
+        server.getTotalRequests().incrementAndGet();
     }
 
     /**
@@ -89,7 +89,7 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                     Unpooled.copiedBuffer(content, StandardCharsets.UTF_8)
             );
         } else {
-            int count = server.getActiveConnections().get();
+            int count = server.getActiveConnections().get() / 2;
             response = new DefaultFullHttpResponse (
                     HttpVersion.HTTP_1_1,
                     HttpResponseStatus.OK,
@@ -429,7 +429,7 @@ public class RequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
                     // 获取服务器数据
                     long activeConnections = server.getActiveConnections().get();
-                    long totalRequests = server.getTotalRequests().get();
+                    long totalRequests = server.getTotalRequests().get() / 2;
                     long startTime = server.getStartTime().get();
                     long uptime = (System.currentTimeMillis() - startTime) / 1000;
 
